@@ -17,6 +17,10 @@ commits/image are not published yet. Publish component commits before publishing
 the parent pin, and verify the image before selecting a deployment tag. Source
 integration does not deploy the replacement for legacy RazChess.
 
+The [design contract](docs/plans/2026-11-24-chess-design.md) and
+[phased implementation evidence](docs/plans/2026-11-24-chess-implementation.md)
+are maintained with this service.
+
 ## Run locally
 
 The parent development stack supplies Caddy, Gateway, PostgreSQL and the scoped

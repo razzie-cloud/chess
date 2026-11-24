@@ -1,7 +1,7 @@
 # Chess implementation verification
 
-Completed locally on 24–25 November 2026. The parent
-[phased implementation record](../../docs/plans/2026-11-24-chess-implementation.md)
+Completed locally on 24–25 November 2026. The
+[phased implementation record](plans/2026-11-24-chess-implementation.md)
 maps the design's phases to the delivered source. This file records service
 checks; [platform verification](platform-verification.md) records Compose,
 Swarm, broker policies, helper fixtures, tag selection and Caddy validation.

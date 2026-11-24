@@ -2,7 +2,7 @@
 
 This independent Go 1.27 module is `github.com/razzie-cloud/chess`. Keep its
 source here, coordination in the parent, and Swarm configuration in `infra`.
-The parent design is `docs/plans/2026-11-24-chess-design.md`.
+The design and phased implementation evidence live in `docs/plans/`.
 
 PostgreSQL is authoritative for matches, grants, sessions, puzzle definitions,
 attempts and progress. No Redis, game registry, sticky sessions or runtime solver.
