@@ -1,0 +1,49 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: chess_test
+          POSTGRES_PASSWORD: chess-test-only
+          POSTGRES_DB: chess_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U chess_test" --health-interval 2s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://chess_test:chess-test-only@127.0.0.1:5432/chess_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Require a browser for production-CSP acceptance
+        run: |
+          browser=$(command -v google-chrome || command -v chromium || true)
+          test -n "$browser"
+          printf 'CHROMIUM_EXECUTABLE_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+      - run: test -z "$(gofmt -l cmd internal tests tools)"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go test -race ./...
+      - run: go run ./cmd/puzzleprep compile -input puzzles/source.json -output /tmp/chess-puzzles.json -report /tmp/chess-preparation.json
+      - run: cmp internal/db/seeds/puzzles.json /tmp/chess-puzzles.json
+      - run: go run ./cmd/puzzleprep verify -input internal/db/seeds/puzzles.json
+      - name: Verify deterministic opening data
+        run: |
+          cp internal/opening/eco.tsv /tmp/chess-eco.before.tsv
+          go generate ./internal/opening
+          cmp /tmp/chess-eco.before.tsv internal/opening/eco.tsv
+      - run: docker build -t chess:test .
+      - run: bash tools/check-image.sh chess:test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chess-browser-screenshots
+          path: docs/screenshots/
+          if-no-files-found: ignore
