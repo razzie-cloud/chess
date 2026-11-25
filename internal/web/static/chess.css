@@ -1,6 +1,26 @@
-:root:not([data-theme]){--pico-font-size:100%;--pico-primary:#243b63;--pico-primary-background:#243b63;--pico-primary-hover:#1b2e4e;--pico-primary-focus:#243b6333;--pico-primary-hover-background:#324f7f}body{min-height:100vh}
+:root:not([data-theme="dark"]) {
+  --pico-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --pico-font-size: 100%; --pico-line-height: 1.55;
+  --pico-background-color: #f7f8fa; --pico-color: #26364b;
+  --pico-h1-color: #15273d; --pico-h2-color: #15273d; --pico-h3-color: #15273d;
+  --pico-muted-color: #627185; --pico-muted-border-color: #e3e8ee;
+  --pico-primary: #202e50; --pico-primary-hover: #15223e;
+  --pico-primary-background: #202e50; --pico-primary-border: #202e50;
+  --pico-primary-hover-background: #15223e; --pico-primary-hover-border: #15223e;
+  --pico-primary-focus: #202e502b; --pico-primary-inverse: #fff;
+  --pico-secondary: #526176; --pico-secondary-background: #526176; --pico-secondary-border: #526176;
+  --pico-form-element-background-color: #fff; --pico-form-element-border-color: #d5dde5;
+  --pico-form-element-active-border-color: #202e50;
+  --pico-border-radius: .5rem; --pico-card-background-color: #fff;
+  --pico-card-sectioning-background-color: #fbfcfd;
+  --pico-card-box-shadow: 0 2px 3px #13263d03;
+  --pico-block-spacing-vertical: 1.35rem;
+  --chess-nav-active-color: #202e50; --chess-nav-active-background: #fff1cb;
+  --chess-header-background: #fff;
+}
+body{min-height:100vh}
 .topbar,.app-nav,.container{width:100%;max-width:1200px;margin-inline:auto;padding-inline:2rem;min-width:0}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--pico-muted-border-color)}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--pico-muted-border-color);background:var(--chess-header-background)}
 .brand-group,.topbar-right{display:flex;align-items:center;gap:.7rem}
 .brand{--pico-color:var(--pico-h1-color);display:flex;align-items:center;gap:.7rem;color:var(--pico-color);text-decoration:none;font-size:1.22rem;letter-spacing:-.04em;white-space:nowrap}
 .brand-mark{display:block;width:46px;height:46px;object-fit:contain;flex-shrink:0;transform:scale(.8)}
@@ -10,7 +30,7 @@
 .app-nav a,.app-nav .nav-link{color:var(--pico-muted-color)}
 .app-nav .nav-link{display:inline-block;width:auto;margin:calc(var(--pico-nav-link-spacing-vertical)*-1) calc(var(--pico-nav-link-spacing-horizontal)*-1);border:0;border-radius:var(--pico-border-radius);padding:var(--pico-nav-link-spacing-vertical) var(--pico-nav-link-spacing-horizontal);background:transparent;box-shadow:none;font:inherit;line-height:inherit;white-space:nowrap}
 .app-nav .nav-link:focus-visible{outline:2px solid var(--pico-primary);outline-offset:2px}
-.app-nav [data-nav][aria-current=page]{color:var(--pico-primary);font-weight:600;text-decoration:underline}
+.app-nav [data-nav][aria-current=page]{color:var(--chess-nav-active-color);background:var(--chess-nav-active-background);border-radius:var(--pico-border-radius);font-weight:600;text-decoration:none}
 .app-nav [role=button]{padding:.4rem .7rem;font-size:inherit}
 .container{padding-block:1.5rem}
 button,[role=button]{--pico-form-element-spacing-vertical:.5rem;--pico-form-element-spacing-horizontal:.8rem;font-size:.9rem}
@@ -24,7 +44,46 @@ h1{font-size:1.8rem;overflow-wrap:anywhere}.game-grid{display:grid;grid-template
 .game-menu :is(a,button){display:block;width:100%;margin:0;border:0;border-radius:var(--pico-border-radius);padding:.55rem .75rem;background:transparent;box-shadow:none;color:inherit;font-size:.9rem;line-height:1.5;text-align:left;text-decoration:none}
 .game-menu :is(a,button):is(:hover,:focus-visible){background:var(--pico-secondary-background);color:var(--pico-secondary-inverse)}
 .game-menu form{margin:0;padding-top:.3rem;border-top:1px solid var(--pico-muted-border-color)}
-dialog{border:0;padding:1.5rem;max-width:min(600px,calc(100vw - 2rem));background:var(--pico-background-color);color:var(--pico-color)}dialog:not([open]){display:none}.editor-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1rem}.board .annotated{box-shadow:inset 0 0 0 4px #e4ad30}.board .last-move{background-image:linear-gradient(#e9b73566,#e9b73566)}.board .in-check{box-shadow:inset 0 0 1rem .5rem #c44}.skip{position:absolute;left:-999px}.skip:focus{left:1rem;top:1rem;z-index:100}footer{text-align:center;color:var(--pico-muted-color);padding:2rem}.puzzle-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:.6rem}.puzzle-grid a{text-align:center;border:1px solid var(--pico-muted-border-color);border-radius:.4rem;padding:.6rem}.puzzle-grid a.solved{border-color:#47815b;background:#47815b22}.branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:1.5rem}.branch{min-width:0}input:not([type=checkbox]):not([type=radio]),textarea,select{min-width:0}.button-row button{width:auto}@media(max-width:700px){.game-grid{grid-template-columns:minmax(0,1fr);gap:1rem}.filters{flex-wrap:wrap}.filters label{flex-basis:40%}.container,.app-nav{padding-inline:1rem}.app-nav{gap:.5rem}h1{font-size:1.4rem}}@media(max-width:480px){.app-nav{--pico-nav-element-spacing-horizontal:.3rem;font-size:.85rem;gap:.5rem}.app-nav [role=button]{padding:.4rem .55rem;white-space:nowrap}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}}@media(prefers-color-scheme:dark){.badge.green{background:#203b32;color:#91c8ae}:root:not([data-theme]){--pico-primary:#b9ccec;--pico-primary-background:#294571;--pico-primary-hover:#d0dff6;--pico-primary-focus:#b9ccec33;--pico-primary-hover-background:#345886}}
+dialog{border:0;padding:1.5rem;max-width:min(600px,calc(100vw - 2rem));background:var(--pico-background-color);color:var(--pico-color)}dialog:not([open]){display:none}.editor-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1rem}.board .annotated{box-shadow:inset 0 0 0 4px #e4ad30}.board .last-move{background-image:linear-gradient(#e9b73566,#e9b73566)}.board .in-check{box-shadow:inset 0 0 1rem .5rem #c44}.skip{position:absolute;left:-999px}.skip:focus{left:1rem;top:1rem;z-index:100}footer{text-align:center;color:var(--pico-muted-color);padding:2rem}.puzzle-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:.6rem}.puzzle-grid a{text-align:center;border:1px solid var(--pico-muted-border-color);border-radius:.4rem;padding:.6rem}.puzzle-grid a.solved{border-color:#47815b;background:#47815b22}.branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:1.5rem}.branch{min-width:0}input:not([type=checkbox]):not([type=radio]),textarea,select{min-width:0}.button-row button{width:auto}@media(max-width:700px){.game-grid{grid-template-columns:minmax(0,1fr);gap:1rem}.filters{flex-wrap:wrap}.filters label{flex-basis:40%}.container,.app-nav{padding-inline:1rem}.app-nav{gap:.5rem}h1{font-size:1.4rem}}@media(max-width:480px){.app-nav{--pico-nav-element-spacing-horizontal:.3rem;font-size:.85rem;gap:.5rem}.app-nav [role=button]{padding:.4rem .55rem;white-space:nowrap}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}}@media(prefers-color-scheme:dark){
+:root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --pico-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --pico-font-size: 100%; --pico-line-height: 1.55;
+  --pico-background-color: #101722; --pico-color: #dfe7f3;
+  --pico-h1-color: #f0f4fa; --pico-h2-color: #e7edf7; --pico-h3-color: #e7edf7;
+  --pico-muted-color: #a0afc4; --pico-muted-border-color: #2b384c;
+  --pico-primary: #ffcb67; --pico-primary-hover: #ffda94;
+  --pico-primary-background: #ffc34d; --pico-primary-border: #ffc34d;
+  --pico-primary-hover-background: #ffd17b; --pico-primary-hover-border: #ffd17b;
+  --pico-primary-focus: #ffc34d40; --pico-primary-inverse: #17243e;
+  --pico-secondary: #b4c3d9; --pico-secondary-background: #35445b;
+  --pico-secondary-border: #63748e; --pico-secondary-hover: #e1e9f6;
+  --pico-secondary-hover-background: #40526d; --pico-secondary-hover-border: #94a6c0;
+  --pico-secondary-focus: #b4c3d933; --pico-secondary-inverse: #f0f4fa;
+  --pico-form-element-background-color: #121c2a;
+  --pico-form-element-border-color: #42516a;
+  --pico-form-element-color: #e3ebf7;
+  --pico-form-element-placeholder-color: #8c9db5;
+  --pico-form-element-active-background-color: #172233;
+  --pico-form-element-active-border-color: #ffcb67;
+  --pico-form-element-focus-color: #ffc34d30;
+  --pico-form-element-selected-background-color: #ffc34d;
+  --pico-border-radius: .5rem; --pico-card-background-color: #182231;
+  --pico-card-border-color: #2b384c; --pico-card-sectioning-background-color: #1b2739;
+  --pico-card-box-shadow: 0 2px 4px #00000014;
+  --pico-block-spacing-vertical: 1.35rem;
+  --pico-code-background-color: #233147; --pico-code-color: #bacbe3;
+  --pico-dropdown-background-color: #1b2739; --pico-dropdown-border-color: #42516a;
+  --pico-dropdown-color: #dfe7f3; --pico-dropdown-hover-background-color: #29384f;
+  --pico-accordion-active-summary-color: #ffcb67;
+  --pico-accordion-close-summary-color: #b4c3d9;
+  --pico-accordion-open-summary-color: #dfe7f3;
+  --pico-text-selection-color: #ffc34d35;
+  --chess-nav-active-color: #ffd27d; --chess-nav-active-background: #3a3226;
+  --chess-header-background: #141d2a;
+}
+.badge.green{background:#203d35;color:#a0dcc2}
+}
 
 .game-grid>div:first-child{max-width:640px;width:100%}
 
