@@ -169,6 +169,34 @@ and Chromium. The temporary PostgreSQL container was removed afterward.
 No live SSO, production database, Docker image build, publication or deployment
 was exercised for this styling change.
 
+## Button-anchored game menus — 25 November 2026
+
+Match and puzzle menus now use native CSS anchor positioning: their top-left
+corner meets the invoking button's bottom-left corner when space permits.
+Fallbacks flip horizontally, vertically or both, then allow horizontal shifting
+and finally use the available viewport when neither side fits. The existing
+height limit and scrolling keep all actions reachable on short screens.
+Browsers without `position-area` support retain their default centered popover.
+The final placement stays within five alternatives, the minimum required by the
+[CSS specification](https://www.w3.org/TR/css-anchor-position-1/#position-try-fallbacks).
+
+Validation used the same isolated Go cache and installed Chromium as above,
+with a new disposable loopback PostgreSQL container:
+
+- `gofmt`, `go build ./...`, `go vet ./...`, `go test ./... -count=1` and
+  `go test -race ./... -count=1`: 140 checks passed per suite; opt-in live
+  acceptance skipped.
+- Browser checks now open both menus through their actual buttons and verify
+  aligned edges, viewport bounds, all four corners and horizontal shifting in
+  both themes at 390/1440 pixels. A 390×300 match verifies bounded scrolling
+  and access to the final action. Existing 320/390/768/1440 layout and persistent
+  state checks also passed with production CSP.
+- Eight menu screenshots refreshed; representative desktop/mobile captures in
+  both themes visually reviewed. `git diff --check` passed.
+
+No JavaScript, templates or dependencies changed. Firefox/Safari and live SSO
+were not exercised. No image publication or deployment ran.
+
 ## Handoff limits
 
 No remote, commit, Git tag, parent gitlink or image was published, and nothing

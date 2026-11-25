@@ -67,9 +67,30 @@ func screenshot(t *testing.T, b *browser.Browser, name string) {
 
 func checkCompactControls(t *testing.T, b *browser.Browser, menu, name string) {
 	t.Helper()
-	b.Run(`for(const group of document.querySelectorAll('[role=group]')){const input=group.querySelector('input'),button=group.querySelector('button');if(!input||!button)continue;const a=input.getBoundingClientRect(),z=button.getBoundingClientRect();assert(Math.abs(a.top-z.top)<2&&Math.abs(a.bottom-z.bottom)<2,'move group alignment');assert(a.width>=80,'move input too narrow');}const menu=el('#` + menu + `');menu.showPopover();await frame();const items=[...menu.querySelectorAll('nav a,nav button')];assert(items.length===11,'missing game actions');const first=items[0].getBoundingClientRect(),color=getComputedStyle(items[1]).color;for(const item of items){assert(getComputedStyle(item).color===color,'menu text colors differ');const box=item.getBoundingClientRect();assert(Math.abs(box.left-first.left)<2&&Math.abs(box.width-first.width)<2,'menu item alignment');assert(box.height>=36,'menu target too small');}items[0].focus();assert(document.activeElement===items[0],'menu keyboard focus');assert(menu.getBoundingClientRect().right<=innerWidth,'menu overflow');`)
+	b.Run(`for(const group of document.querySelectorAll('[role=group]')){const input=group.querySelector('input'),button=group.querySelector('button');if(!input||!button)continue;const a=input.getBoundingClientRect(),z=button.getBoundingClientRect();assert(Math.abs(a.top-z.top)<2&&Math.abs(a.bottom-z.bottom)<2,'move group alignment');assert(a.width>=80,'move input too narrow');}const menu=el('#` + menu + `'),trigger=el('[popovertarget="` + menu + `"]');trigger.scrollIntoView({block:'center'});await frame();trigger.click();await frame();const anchor=trigger.getBoundingClientRect(),popup=menu.getBoundingClientRect();assert(Math.abs(popup.left-anchor.left)<2||Math.abs(popup.right-anchor.right)<2,'menu detached horizontally');assert(Math.abs(popup.top-anchor.bottom)<2||Math.abs(popup.bottom-anchor.top)<2,'menu detached vertically');assert(popup.top>=0&&popup.bottom<=innerHeight&&popup.left>=0&&popup.right<=innerWidth,'menu outside viewport '+JSON.stringify({popup,anchor,width:innerWidth,height:innerHeight}));const items=[...menu.querySelectorAll('nav a,nav button')];assert(items.length===11,'missing game actions');const first=items[0].getBoundingClientRect(),color=getComputedStyle(items[1]).color;for(const item of items){assert(getComputedStyle(item).color===color,'menu text colors differ');const box=item.getBoundingClientRect();assert(Math.abs(box.left-first.left)<2&&Math.abs(box.width-first.width)<2,'menu item alignment');assert(box.height>=36,'menu target too small');}items[0].focus();assert(document.activeElement===items[0],'menu keyboard focus');assert(menu.getBoundingClientRect().right<=innerWidth,'menu overflow');`)
 	screenshot(t, b, name)
-	b.Run(`el('#` + menu + `').hidePopover();`)
+	b.Run(`
+const menu=el('#` + menu + `'),trigger=el('[popovertarget="` + menu + `"]');
+menu.hidePopover();
+const original=trigger.style.cssText;
+try {
+  for(const bottom of [false,true]) for(const right of [false,true]) {
+    trigger.style.cssText='position:fixed;margin:0;'+(bottom?'bottom:16px;':'top:16px;')+(right?'right:16px;':'left:16px;');
+    trigger.click();await frame();
+    const anchor=trigger.getBoundingClientRect(),popup=menu.getBoundingClientRect();
+    assert(Math.abs((right?popup.right:popup.left)-(right?anchor.right:anchor.left))<2,'menu horizontal fallback');
+    assert(Math.abs((bottom?popup.bottom:popup.top)-(bottom?anchor.top:anchor.bottom))<2,'menu vertical fallback');
+    assert(popup.top>=0&&popup.bottom<=innerHeight&&popup.left>=0&&popup.right<=innerWidth,'fallback outside viewport');
+    menu.hidePopover();
+  }
+  trigger.style.cssText='position:fixed;top:16px;left:50%;margin:0';
+  trigger.click();await frame();
+  const anchor=trigger.getBoundingClientRect(),popup=menu.getBoundingClientRect();
+  assert(Math.abs(popup.top-anchor.bottom)<2,'menu should remain below button');
+  assert(popup.left>=0&&popup.right<=innerWidth,'menu horizontal shift');
+  menu.hidePopover();
+} finally {trigger.style.cssText=original;}
+`)
 }
 
 func TestBrowserPersistentBoardAndCSP(t *testing.T) {
@@ -109,6 +130,9 @@ func TestBrowserPersistentBoardAndCSP(t *testing.T) {
 			}
 		}
 	}
+	b.Viewport(390, 300)
+	b.Navigate(f.cfg.Origin + "/matches/" + created.ID)
+	b.Run(`const trigger=el('[popovertarget="game-menu"]');trigger.scrollIntoView({block:'center'});await frame();trigger.click();await frame();const menu=el('#game-menu'),box=menu.getBoundingClientRect();assert(box.top>=0&&box.bottom<=innerHeight&&box.left>=0&&box.right<=innerWidth,'short viewport menu overflow');assert(menu.scrollHeight>menu.clientHeight,'short menu should scroll');menu.querySelector('form button').scrollIntoView();await frame();assert(menu.scrollTop>0,'menu actions unreachable');`)
 	b.AssertNoErrors()
 }
 
