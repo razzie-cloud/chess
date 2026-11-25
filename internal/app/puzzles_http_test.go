@@ -37,7 +37,7 @@ func TestPuzzleCollectionsContainNumbersPreviewsAndImmediatePlay(t *testing.T) {
 	r := httptest.NewRequest("GET", f.cfg.Origin+"/puzzles/razchess-mates-v1/50", nil)
 	f.sign(r, f.owner, false)
 	w := response(f.handler, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "<h1>Mate challenge 51</h1>") || !strings.Contains(w.Body.String(), "Mate in 2, playing Black") || !strings.Contains(w.Body.String(), `class="puzzle-move sidebar-section"`) || strings.Contains(w.Body.String(), "/attempts") || strings.Contains(w.Body.String(), "puzzle-menu") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "<h1>Mate challenge 51</h1>") || !strings.Contains(w.Body.String(), "Mate in 2, playing Black") || !strings.Contains(w.Body.String(), "Black to move") || !strings.Contains(w.Body.String(), "/static/pieces/bN.png") || !strings.Contains(w.Body.String(), `class="puzzle-move sidebar-section"`) || strings.Contains(w.Body.String(), "/attempts") || strings.Contains(w.Body.String(), "puzzle-menu") {
 		t.Fatal("puzzle did not open ready to play")
 	}
 }
@@ -95,6 +95,25 @@ func TestPuzzleSignedFullStateAcrossReplicasAndPrivateProgress(t *testing.T) {
 			t.Fatalf("move response: %d %s", w.Code, w.Body.String())
 		}
 		state = puzzleResponseState(t, w.Body.String())
+		for _, board := range state.Boards {
+			fragment := regexp.MustCompile(`class="branch-state" data-branch="` + regexp.QuoteMeta(board.ID) + `"[^>]*>(.*?)</section>`).FindStringSubmatch(w.Body.String())
+			if len(fragment) != 2 {
+				t.Fatal("missing branch status")
+			}
+			if board.Done {
+				if strings.Contains(fragment[1], " to move") || !strings.Contains(fragment[1], "Checkmate · line complete") {
+					t.Fatal("completed branch still asks for a move")
+				}
+			} else {
+				turn, piece := "White", "wN"
+				if strings.Fields(board.FEN)[1] == "b" {
+					turn, piece = "Black", "bN"
+				}
+				if !strings.Contains(fragment[1], turn+" to move") || !strings.Contains(fragment[1], "/static/pieces/"+piece+".png") {
+					t.Fatal("updated branch status disagrees with canonical position")
+				}
+			}
+		}
 		last = in
 	}
 	// Final retry carries its complete prior state and stays idempotent on another replica.

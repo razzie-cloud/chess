@@ -25,8 +25,8 @@ type PuzzleView struct {
 }
 type BranchView struct {
 	puzzle.Board
-	Solver, Base, PathJSON, Label, CheckSquare string
-	Legal                                      []string
+	Solver, Base, PathJSON, Label, CheckSquare, Turn string
+	Legal                                            []string
 }
 
 func (s *Server) puzzleRoutes(p *http.ServeMux) {
@@ -107,6 +107,10 @@ func (s *Server) puzzleData(r *http.Request, d puzzle.Definition, state puzzle.P
 			branch.Label = strings.Join(labels, " ")
 		}
 		if board, e := game.ValidateFEN(b.FEN); e == nil {
+			branch.Turn = "White"
+			if board.SideToMove == chess.Black {
+				branch.Turn = "Black"
+			}
 			if check, _ := board.IsCheckOrMate(); check {
 				for square, piece := range board.Piece {
 					if piece.Type() == chess.King && piece.Color() == board.SideToMove {
