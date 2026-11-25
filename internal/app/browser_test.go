@@ -180,7 +180,7 @@ func TestBrowserGuestBootstrapAndPuzzleBranches(t *testing.T) {
 		b.Call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}})
 		for _, width := range []int{320, 390, 768, 1440} {
 			b.Viewport(width, 1000)
-			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'puzzle overflow');assert(cspErrors.length===0,JSON.stringify(cspErrors));const boards=[...document.querySelectorAll('.branch .board')];assert(boards.length===2,'defense boards');if(innerWidth>700)assert(Math.abs(boards[0].getBoundingClientRect().top-boards[1].getBoundingClientRect().top)<2,'board alignment');`)
+			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'puzzle overflow');assert(cspErrors.length===0,JSON.stringify(cspErrors));const boards=[...document.querySelectorAll('.branch .board')];assert(boards.length===2,'defense boards');for(const branch of document.querySelectorAll('.branch')){const board=branch.querySelector('.board').getBoundingClientRect(),side=branch.querySelector('.puzzle-sidebar').getBoundingClientRect();if(innerWidth>700)assert(side.left>board.right&&Math.abs(side.top-board.top)<2,'puzzle sidebar alignment');else assert(side.top>=board.bottom,'mobile puzzle sidebar');}assert(el('.puzzle-sidebar').contains(el('#puzzle-navigation'))&&el('.puzzle-sidebar').contains(el('.puzzle-summary')),'puzzle overview outside sidebar');`)
 			screenshot(t, b, fmt.Sprintf("puzzle-%s-%d", theme, width))
 		}
 	}

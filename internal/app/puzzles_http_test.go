@@ -37,7 +37,7 @@ func TestPuzzleCollectionsContainNumbersPreviewsAndImmediatePlay(t *testing.T) {
 	r := httptest.NewRequest("GET", f.cfg.Origin+"/puzzles/razchess-mates-v1/50", nil)
 	f.sign(r, f.owner, false)
 	w := response(f.handler, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "<h1>Mate challenge 51</h1>") || !strings.Contains(w.Body.String(), "Mate in 2, playing Black") || !strings.Contains(w.Body.String(), `class="puzzle-move"`) || strings.Contains(w.Body.String(), "/attempts") || strings.Contains(w.Body.String(), "puzzle-menu") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "<h1>Mate challenge 51</h1>") || !strings.Contains(w.Body.String(), "Mate in 2, playing Black") || !strings.Contains(w.Body.String(), `class="puzzle-move sidebar-section"`) || strings.Contains(w.Body.String(), "/attempts") || strings.Contains(w.Body.String(), "puzzle-menu") {
 		t.Fatal("puzzle did not open ready to play")
 	}
 }

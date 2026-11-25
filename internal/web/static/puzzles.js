@@ -96,6 +96,9 @@
       const next = new DOMParser().parseFromString(html, 'text/html').querySelector('#puzzle-state');
       if (!next) throw new Error('Puzzle state unavailable');
       if (promotion.open) promotion.close();
+      const overview = state.querySelector('#puzzle-overview'), incomingOverview = next.querySelector('#puzzle-overview');
+      overview.remove();
+      incomingOverview.remove();
       const incomingIDs = new Set([...next.querySelectorAll('.branch')].map(element => element.dataset.branch));
       state.querySelectorAll('.branch').forEach(element => {
         const id = element.dataset.branch;
@@ -112,9 +115,10 @@
         if (changed) boards.get(id).board.position(after.dataset.fen, !reduced);
         highlight(existing); castles(existing);
       });
+      state.querySelector('.puzzle-sidebar').prepend(overview);
       state.dataset.state = next.dataset.state; state.dataset.revision = next.dataset.revision; state.dataset.done = next.dataset.done;
-      state.querySelector('.puzzle-summary').replaceWith(next.querySelector('.puzzle-summary'));
-      state.querySelector('#puzzle-navigation').replaceWith(next.querySelector('#puzzle-navigation'));
+      state.querySelector('.puzzle-summary').replaceWith(incomingOverview.querySelector('.puzzle-summary'));
+      state.querySelector('#puzzle-navigation').replaceWith(incomingOverview.querySelector('#puzzle-navigation'));
       htmx.process(state);
       document.dispatchEvent(new CustomEvent('chess:navigation', {detail: state}));
     };
