@@ -109,7 +109,7 @@ claim every clipboard platform or physical touch/audio device was exercised.
 
 ## Presentation and image
 
-There are 32 maintained screenshots in `docs/screenshots/`: owner, guest, viewer
+There are 40 maintained screenshots in `docs/screenshots/`: owner, guest, viewer
 and expanded-puzzle contexts in light/dark at 320/390/768/1440 pixels. Browser
 checks assert overflow and account-header alignment. Captures wait for board
 animations to settle. Representative mobile/desktop screenshots were visually
@@ -131,6 +131,43 @@ bundle. The isolated image fixture verified startup/migrations/seeding, UID 1000
 and the binary readiness command. It removed its containers/network afterward.
 Parent/infra Git whitespace checks passed. No existing Compose service, operator
 environment, production backend or Docker context was changed.
+
+## Shared service styling — 25 November 2026
+
+Chess now uses the platform cloud-home/service-name header with the shared
+account control on the right. A compact PicoCSS navigation row replaces the
+unstructured links and keeps its active marker current after HTMX navigation.
+Match and puzzle moves use PicoCSS input/button groups. Both native game menus
+share compact, consistently aligned link/button rows. The public playing page
+shows the invited display name with a Guest badge; bootstrap and viewer pages
+have no account identity. No dependencies or authorization paths changed.
+
+Validation ran inside `chess/` with `GOCACHE=/tmp/razcloud-chess-ui-cache`,
+`TEST_DATABASE_URL` pointing to a new disposable loopback-only PostgreSQL
+container, and `CHROMIUM_EXECUTABLE_PATH=/opt/brave-bin/brave`:
+
+- `gofmt` on the changed Go browser test; `go build ./...` and `go vet ./...`.
+- `go test ./... -count=1` and `go test -race ./... -count=1`: all 140 checks
+  passed in each suite; the opt-in live acceptance test skipped.
+- Final focused `go test -race ./internal/app -run TestBrowser -count=1 -v`:
+  all five browser checks passed after the menu contrast/mobile navigation fixes.
+  The two screenshot-producing checks passed again after synchronizing captures
+  with CSS theme transitions.
+- Light/dark owner, guest, viewer and expanded-puzzle layouts at
+  320/390/768/1440 pixels, plus both menus at 390/1440 pixels: 40 refreshed
+  screenshots. Checks cover overflow, account/guest alignment, long guest-name
+  truncation, grouped move alignment, all eleven menu entries, consistent menu
+  text colors/targets, keyboard focus, persistent board/menu nodes, and the
+  navigation marker after HTMX swaps. Representative screenshots were visually
+  reviewed. Captures wait for board animations and CSS transitions to finish.
+- The local account-header CSS still matches Gateway byte-for-byte;
+  `git diff --check` passed.
+
+Go checks used an isolated writable cache because the default cache was outside
+the sandbox. Database/browser checks ran outside the sandbox for local sockets
+and Chromium. The temporary PostgreSQL container was removed afterward.
+No live SSO, production database, Docker image build, publication or deployment
+was exercised for this styling change.
 
 ## Handoff limits
 

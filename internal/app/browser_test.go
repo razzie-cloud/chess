@@ -45,7 +45,7 @@ func browserFixture(t *testing.T, f *httpFixture) *browser.Browser {
 }
 func screenshot(t *testing.T, b *browser.Browser, name string) {
 	t.Helper()
-	b.Run(`await wait(()=>jQuery(':animated').length===0);await frame();`)
+	b.Run(`await wait(()=>jQuery(':animated').length===0);await wait(()=>document.getAnimations().every(animation=>animation.playState!=='running'));await frame();`)
 	var result struct {
 		Data string `json:"data"`
 	}
@@ -63,6 +63,13 @@ func screenshot(t *testing.T, b *browser.Browser, name string) {
 	if e = os.WriteFile(filepath.Join(dir, name+".png"), data, 0644); e != nil {
 		t.Fatal(e)
 	}
+}
+
+func checkCompactControls(t *testing.T, b *browser.Browser, menu, name string) {
+	t.Helper()
+	b.Run(`for(const group of document.querySelectorAll('[role=group]')){const input=group.querySelector('input'),button=group.querySelector('button');if(!input||!button)continue;const a=input.getBoundingClientRect(),z=button.getBoundingClientRect();assert(Math.abs(a.top-z.top)<2&&Math.abs(a.bottom-z.bottom)<2,'move group alignment');assert(a.width>=80,'move input too narrow');}const menu=el('#` + menu + `');menu.showPopover();await frame();const items=[...menu.querySelectorAll('nav a,nav button')];assert(items.length===11,'missing game actions');const first=items[0].getBoundingClientRect(),color=getComputedStyle(items[1]).color;for(const item of items){assert(getComputedStyle(item).color===color,'menu text colors differ');const box=item.getBoundingClientRect();assert(Math.abs(box.left-first.left)<2&&Math.abs(box.width-first.width)<2,'menu item alignment');assert(box.height>=36,'menu target too small');}items[0].focus();assert(document.activeElement===items[0],'menu keyboard focus');assert(menu.getBoundingClientRect().right<=innerWidth,'menu overflow');`)
+	screenshot(t, b, name)
+	b.Run(`el('#` + menu + `').hidePopover();`)
 }
 
 func TestBrowserPersistentBoardAndCSP(t *testing.T) {
@@ -95,8 +102,11 @@ func TestBrowserPersistentBoardAndCSP(t *testing.T) {
 		b.Call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}})
 		for _, width := range []int{320, 390, 768, 1440} {
 			b.Viewport(width, 1000)
-			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');const identity=el('.identity');assert(identity.getBoundingClientRect().right<=innerWidth,'identity overflow');const shield=identity.querySelector('svg').getBoundingClientRect();const text=identity.querySelector('strong').getBoundingClientRect();assert(Math.abs((shield.top+shield.height/2)-(text.top+text.height/2))<6,'account alignment');`)
+			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');assert(el('.app-nav').getBoundingClientRect().height<65,'navigation too bulky');const identity=el('.identity');assert(identity.getBoundingClientRect().right<=innerWidth,'identity overflow');const shield=identity.querySelector('svg').getBoundingClientRect();const text=identity.querySelector('strong').getBoundingClientRect();assert(Math.abs((shield.top+shield.height/2)-(text.top+text.height/2))<6,'account alignment');`)
 			screenshot(t, b, fmt.Sprintf("owner-%s-%d", theme, width))
+			if width == 390 || width == 1440 {
+				checkCompactControls(t, b, "game-menu", fmt.Sprintf("menu-%s-%d", theme, width))
+			}
 		}
 	}
 	b.AssertNoErrors()
@@ -109,7 +119,7 @@ func TestBrowserGuestBootstrapAndPuzzleBranches(t *testing.T) {
 	if e := s.Seed(ctx); e != nil {
 		t.Fatal(e)
 	}
-	created, e := s.Create(ctx, f.owner, uuid.NewString(), store.Setup{Name: "Guest", Color: "b", Mode: "standard"})
+	created, e := s.Create(ctx, f.owner, uuid.NewString(), store.Setup{Name: "Alexandria — long guest display name", Color: "b", Mode: "standard"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -122,7 +132,7 @@ func TestBrowserGuestBootstrapAndPuzzleBranches(t *testing.T) {
 	}
 	b.Eval(`document.querySelector("#guest-continue").click()`)
 	waitDocument(t, b, `location.pathname.startsWith("/play/")&&document.querySelector("#match-board img")`)
-	b.Run(`assert(!document.querySelector(".identity"),"guest identity");assert(location.hash==="","guest fragment");`)
+	b.Run(`assert(!document.querySelector('[aria-label="Signed-in account"]'),"guest cloud identity");assert(el('[aria-label="Guest player"] strong').textContent==="Alexandria — long guest display name","guest name");assert(el('[aria-label="Guest player"] .badge').textContent==="Guest","guest label");assert(location.hash==="","guest fragment");`)
 	for _, role := range []string{"guest", "viewer"} {
 		if role == "viewer" {
 			b.Navigate(f.cfg.ShareOrigin + "/watch/" + created.ViewToken)
@@ -131,7 +141,7 @@ func TestBrowserGuestBootstrapAndPuzzleBranches(t *testing.T) {
 			b.Call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}})
 			for _, width := range []int{320, 390, 768, 1440} {
 				b.Viewport(width, 1000)
-				b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'public overflow');assert(cspErrors.length===0,JSON.stringify(cspErrors));`)
+				b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'public overflow');const guest=document.querySelector('[aria-label=\"Guest player\"]');if(el('#match-panel').dataset.role==='guest'){assert(guest,'missing guest');const label=guest.querySelector('.badge').getBoundingClientRect(),name=guest.querySelector('strong').getBoundingClientRect();assert(name.width>20,'guest name hidden');assert(Math.abs((label.top+label.height/2)-(name.top+name.height/2))<3,'guest label alignment');assert(guest.getBoundingClientRect().right<=innerWidth,'guest header overflow');}else{assert(!guest&&!document.querySelector('[aria-label=\"Signed-in account\"]'),'viewer identity');}assert(cspErrors.length===0,JSON.stringify(cspErrors));`)
 				screenshot(t, b, fmt.Sprintf("%s-%s-%d", role, theme, width))
 			}
 		}
@@ -152,6 +162,9 @@ func TestBrowserGuestBootstrapAndPuzzleBranches(t *testing.T) {
 			b.Viewport(width, 1000)
 			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'puzzle overflow');assert(cspErrors.length===0,JSON.stringify(cspErrors));const summary=el('.branch[data-parent=true]').getBoundingClientRect();const child=el('.branch[data-parent=false]').getBoundingClientRect();assert(summary.bottom<=child.top,'retired parent did not compact above live boards');`)
 			screenshot(t, b, fmt.Sprintf("puzzle-%s-%d", theme, width))
+			if width == 390 || width == 1440 {
+				checkCompactControls(t, b, "puzzle-menu", fmt.Sprintf("puzzle-menu-%s-%d", theme, width))
+			}
 		}
 	}
 	// Acknowledged source paths advance only the selected child; its sibling DOM survives.
@@ -191,7 +204,7 @@ func TestBrowserNavigationDraftAndStaleState(t *testing.T) {
 	}
 	b := browserFixture(t, f)
 	b.Navigate(f.cfg.Origin + "/matches/" + created.ID)
-	b.Run(`window.header=el('.cloud-header');window.initialBoard=el('#match-board');window.oldState=await(await fetch(el('#match-panel').dataset.base+'/state')).text();el('#move-form').elements.uci.value='e2e4';el('#move-form').requestSubmit();await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===2);document.dispatchEvent(new CustomEvent('htmx:beforeSwap',{detail:{target:el('#match-state'),xhr:{status:200,responseText:oldState}}}));assert(JSON.parse(el('#match-state').dataset.state).revision===2,'delayed state rewound move');el('.app-nav a[href="/matches/archive"]').click();await wait(()=>location.pathname==='/matches/archive'&&document.querySelector('h1')?.textContent==='Archive');assert(el('.cloud-header')===header,'shell replaced');assert(!initialBoard.isConnected,'board retained after navigation');el('.app-nav a[href="/matches/new"]').click();await wait(()=>document.querySelector('#editor-board img'));assert(el('.cloud-header')===header,'new-page shell replaced');el('#edit-fen').value='7k/8/5KQ1/8/8/8/8/8 w - - 17 23';el('#edit-fen').dispatchEvent(new Event('input',{bubbles:true}));el('.app-nav a[href="/matches"]').click();await frame();`)
+	b.Run(`window.header=el('.cloud-header');window.initialBoard=el('#match-board');window.oldState=await(await fetch(el('#match-panel').dataset.base+'/state')).text();el('#move-form').elements.uci.value='e2e4';el('#move-form').requestSubmit();await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===2);document.dispatchEvent(new CustomEvent('htmx:beforeSwap',{detail:{target:el('#match-state'),xhr:{status:200,responseText:oldState}}}));assert(JSON.parse(el('#match-state').dataset.state).revision===2,'delayed state rewound move');el('.app-nav a[href="/matches/archive"]').click();await wait(()=>location.pathname==='/matches/archive'&&document.querySelector('h1')?.textContent==='Archive');assert(el('.cloud-header')===header,'shell replaced');assert(el('.app-nav [aria-current=page]').pathname==='/matches/archive','navigation marker stale');assert(!initialBoard.isConnected,'board retained after navigation');el('.app-nav a[href="/matches/new"]').click();await wait(()=>document.querySelector('#editor-board img'));assert(el('.cloud-header')===header,'new-page shell replaced');el('#edit-fen').value='7k/8/5KQ1/8/8/8/8/8 w - - 17 23';el('#edit-fen').dispatchEvent(new Event('input',{bubbles:true}));el('.app-nav a[href="/matches"]').click();await frame();`)
 	if b.DialogCount() != 1 {
 		t.Fatalf("draft navigation did not confirm: %d", b.DialogCount())
 	}

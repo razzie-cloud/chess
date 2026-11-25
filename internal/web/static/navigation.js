@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const enhance = root => {
+  const enhance = (root, path = location.pathname) => {
     root.querySelectorAll('a[href]').forEach(link => {
       const raw = link.getAttribute('href');
       const target = new URL(link.href, location.href);
@@ -20,6 +20,11 @@
       form.setAttribute('hx-push-url', 'true');
       form.setAttribute('hx-sync', '#main:replace');
     });
+    const current = path.startsWith('/puzzle') ? '/puzzles' : path === '/matches/archive' ? path : path === '/matches/new' || path === '/create' ? '/matches/new' : '/matches';
+    document.querySelectorAll('.app-nav a').forEach(link => {
+      if (link.getAttribute('href') === current) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
     htmx.process(root);
   };
   addEventListener('DOMContentLoaded', () => enhance(document));
@@ -32,7 +37,7 @@
   });
   document.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target?.id !== 'main') return;
-    enhance(document.querySelector('#main'));
+    enhance(document.querySelector('#main'), new URL(event.detail.xhr.responseURL || location.href).pathname);
     document.dispatchEvent(new Event('chess:mount'));
     document.querySelector('[data-error-summary]')?.focus();
   });

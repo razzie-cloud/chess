@@ -25,7 +25,8 @@ a new collection edition. Completion bits only change from zero to one in SQL.
 Frontend uses escaped embedded Go templates, local HTMX/PicoCSS/chessboard.js and
 external scripts under CSP. Keep a board, menu and promotion dialog mounted across
 state updates, reject stale revisions and retain drafts on errors. Public shells
-omit account identity. Signed-in account CSS follows the identical platform copy.
+omit signed-in account identity; authorized guest play shows the invited name and
+a Guest badge, while viewers remain anonymous. Signed-in account CSS follows the identical platform copy.
 
 Run `gofmt`, `go build ./...`, `go vet ./...`, `go test ./...` and
 `go test -race ./...`. PostgreSQL integration tests require disposable loopback
