@@ -42,6 +42,54 @@ func TestPuzzleCollectionsContainNumbersPreviewsAndImmediatePlay(t *testing.T) {
 	}
 }
 
+func TestRandomPuzzleNavigation(t *testing.T) {
+	s := httpStore(t)
+	f := newHTTPFixture(t, s)
+	request := func(hx bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", f.cfg.Origin+"/puzzles/random", nil)
+		if hx {
+			r.Header.Set("HX-Request", "true")
+		}
+		f.sign(r, f.owner, false)
+		return response(f.handler, r)
+	}
+	for _, hx := range []bool{false, true} {
+		w := request(hx)
+		if w.Code != 303 || w.Header().Get("Location") != "/puzzles" {
+			t.Fatalf("empty random navigation: %d %q", w.Code, w.Header().Get("Location"))
+		}
+	}
+	if err := s.Seed(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, hx := range []bool{false, true} {
+		w := request(hx)
+		location := w.Header().Get("Location")
+		match := regexp.MustCompile(`^/puzzles/razchess-mates-v1/(\d+)$`).FindStringSubmatch(location)
+		if w.Code != 303 || len(match) != 2 {
+			t.Fatalf("random navigation: %d %q", w.Code, location)
+		}
+		slot, err := strconv.Atoi(match[1])
+		if err != nil || slot < 0 || slot >= 206 {
+			t.Fatalf("random slot: %q", match[1])
+		}
+		r := httptest.NewRequest("GET", f.cfg.Origin+location, nil)
+		f.sign(r, f.owner, false)
+		if w := response(f.handler, r); w.Code != 200 || !strings.Contains(w.Body.String(), `id="puzzle-panel"`) {
+			t.Fatal("random destination did not open a puzzle")
+		}
+	}
+	for _, tc := range []struct {
+		origin string
+		status int
+	}{{f.cfg.Origin, 401}, {f.cfg.ShareOrigin, 404}} {
+		r := httptest.NewRequest("GET", tc.origin+"/puzzles/random", nil)
+		if w := response(f.handler, r); w.Code != tc.status {
+			t.Fatalf("random route boundary: %d, want %d", w.Code, tc.status)
+		}
+	}
+}
+
 func puzzleResponseState(t *testing.T, body string) puzzle.PlayState {
 	t.Helper()
 	match := regexp.MustCompile(`id="puzzle-state" data-state="([^"]+)"`).FindStringSubmatch(body)

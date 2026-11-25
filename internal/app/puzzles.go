@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,9 +32,34 @@ type BranchView struct {
 
 func (s *Server) puzzleRoutes(p *http.ServeMux) {
 	p.HandleFunc("GET /puzzles", s.collections)
+	p.HandleFunc("GET /puzzles/random", s.randomPuzzle)
 	p.HandleFunc("GET /puzzles/{collection}", s.collections)
 	p.HandleFunc("GET /puzzles/{collection}/{slot}", s.puzzleDetail)
 	p.HandleFunc("POST /puzzles/{collection}/{slot}/moves", s.puzzleMove)
+}
+func (s *Server) randomPuzzle(w http.ResponseWriter, r *http.Request) {
+	collections, err := s.store.Collections(r.Context(), s.page(r, "Puzzles").User.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	total := 0
+	for _, collection := range collections {
+		total += len(collection.Slots)
+	}
+	if total == 0 {
+		http.Redirect(w, r, "/puzzles", http.StatusSeeOther)
+		return
+	}
+	choice := rand.IntN(total)
+	for _, collection := range collections {
+		if choice < len(collection.Slots) {
+			dest := "/puzzles/" + collection.ID + "/" + strconv.Itoa(collection.Slots[choice].Slot)
+			http.Redirect(w, r, dest, http.StatusSeeOther)
+			return
+		}
+		choice -= len(collection.Slots)
+	}
 }
 func (s *Server) collections(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "Puzzles")
