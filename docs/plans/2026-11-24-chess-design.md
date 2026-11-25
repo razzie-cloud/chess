@@ -32,7 +32,7 @@ prescribed-move puzzles.
 | Match retention | Matches remain until the creator explicitly deletes them. Completed matches appear in an indexed archive, separate from pending/active session lookups. |
 | Viewing | A separate rotatable read-only capability authorizes viewing; the match ID alone grants no public access. |
 | Puzzles | A dedicated signed-in area with collections containing no more than 256 puzzles each. |
-| Puzzle moves | Exactly one prescribed player move at each decision, determined before publication by a preparation tool. |
+| Puzzle moves | Follow the prescribed move from offline proof, or play any legal immediate checkmate. |
 | Puzzle defenses | Enumerate every legal enemy move. The entire solution may contain at most one fork, with two or three replies shown on parallel boards; all other enemy decisions must have exactly one forced reply. |
 | Puzzle completion | The user wins every required branch; the server atomically sets that puzzle's bit in the user's collection progress. |
 | Openings | Preserve local ECO-based opening identification and display, including the most specific recognized opening after leaving the book. |
@@ -40,7 +40,7 @@ prescribed-move puzzles.
 The initial puzzle objective is forced checkmate within a declared number of
 player moves, matching the existing mate-puzzle material. Unbounded mate searches
 and material-advantage objectives are outside this version. FEN-only puzzle input
-must be accompanied by an explicit mate limit or a preparation-command default;
+uses a bounded preparation search to calculate the shortest forced mate;
 the tool must not guess a proof depth from the position.
 
 ## Original functionality and intentional behavior changes
@@ -305,7 +305,7 @@ mix an independent connection acquisition into a held transaction.
 | `match_viewers` | Match, random per-tab viewer identifier, authorized role/scope, last heartbeat. |
 | `mutation_receipts` | Scoped actor/resource/request or puzzle-transition identifier, request digest, committed resource ID/revision and outcome for replay protection. Creation receipts survive explicit match deletion as minimal tombstones. No raw playing tokens. |
 | `puzzle_collections` | Permanent collection/edition identity, title, description, publication metadata. |
-| `puzzles` | Collection/slot, initial FEN, solver color, mate limit, immutable compiled solution, content identity, fork count and complete-line count. |
+| `puzzles` | Collection/slot, initial FEN, solver color, calculated mate length, immutable compiled solution, content identity, fork count and complete-line count. |
 | `puzzle_attempts` | UUID, owner UUID, puzzle identity, revision, active/solved/ended state, timestamps. |
 | `puzzle_branches` | Attempt, parent/child relationship, compiled node/path, current position, remaining move budget, pending/expanded/solved state. |
 | `user_puzzle_progress` | User UUID, collection identity, non-null zero-initialized `solved BIT(256)`, updated timestamp; unique user/collection. |
@@ -512,7 +512,7 @@ application validation. Existing slots are never reassigned or renumbered.
 
 Keep curated source manifests and compiled outputs in the Chess repository.
 The preparation tool can ingest the legacy newline-FEN file with an explicit
-collection identity and mate limit. Report accepted/rejected source entries and
+collection identity and optional search ceiling. Report accepted/rejected source entries and
 their reasons; do not silently discard puzzles or auto-pack more than 256 into
 one collection. Compile the original bundled material and publish only entries
 that meet the proof and single-fork requirements. Keep stable source-to-slot
@@ -540,7 +540,7 @@ entry records collection/edition, permanent slot, FEN, solver color, mate limit,
 title, provenance/license and explicit draft/publish selection. Adding an entry
 checks syntax and slot availability and writes a draft; it does not renumber
 existing entries or publish an unproven puzzle. Batch legacy-FEN import follows
-the same review process and requires explicit collection and mate limits.
+the same review process and calculates mate length within a bounded search.
 
 Example planned workflow:
 
@@ -578,11 +578,16 @@ moves and decreases only when that player moves. Check terminal outcomes before
 declaring the budget exhausted. Stalemate, draws and solver checkmate are not
 success.
 
+First calculate the shortest forced mate without fork limits. Reject a puzzle
+if no strategy at that exact depth satisfies the board limits; never substitute
+a longer solution. Store that calculated depth, not the search ceiling.
 Search the smallest mate budget first, then canonical UCI order, to select one
 prescribed player move deterministically at each reachable player decision.
-Several moves may win in chess; exactly the selected one is accepted during
-gameplay. Other moves receive "Not the solution move", never a false statement
-that they are illegal or necessarily losing.
+Several moves may win in chess; gameplay accepts the selected move and any legal
+immediate checkmate. Other moves receive "Not the solution move", never a false
+statement that they are illegal or necessarily losing. An alternative immediate
+mate saves the actual played move and resulting FEN and solves only that branch;
+it needs no continuation in the prepared tree and does not change edition digests.
 
 After each candidate player move, enumerate the complete legal defense set.
 A fork means an enemy decision with more than one legal reply. The complete

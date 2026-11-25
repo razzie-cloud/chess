@@ -20,11 +20,12 @@ type failure struct {
 func (f *failure) Error() string { return f.reason }
 
 type search struct {
-	ctx     context.Context
-	limit   Limits
-	solver  int
-	nodes   int
-	problem *failure
+	ctx          context.Context
+	limit        Limits
+	solver       int
+	nodes        int
+	problem      *failure
+	unrestricted bool
 }
 
 func (s *search) tick() error {
@@ -81,7 +82,7 @@ func (s *search) attacker(b *chess.Board, budget, forks int, history []*chess.Bo
 				continue
 			}
 			replies := ordered(after)
-			if len(replies) > 3 {
+			if len(replies) > 3 && !s.unrestricted {
 				s.reject("more than three legal replies", after, p)
 				continue
 			}
@@ -167,6 +168,34 @@ func color(s string) int {
 	return chess.White
 }
 
+// FindMate calculates the shortest forced mate without the gameplay fork limits.
+func FindMate(ctx context.Context, src Source, limits Limits) (int, error) {
+	if err := CheckSource(src); err != nil {
+		return 0, err
+	}
+	if limits.MaxMate < src.Mate || limits.MaxMate > 5 || limits.MaxNodes < 1 || limits.MaxDuration <= 0 || limits.MaxBytes < 1 {
+		return 0, errors.New("invalid mate search limits")
+	}
+	ctx, cancel := context.WithTimeout(ctx, limits.MaxDuration)
+	defer cancel()
+	b, _ := game.ValidateFEN(src.FEN)
+	s := search{ctx: ctx, limit: limits, solver: b.SideToMove}
+	return s.shortest(b, src.Mate)
+}
+
+func (s *search) shortest(b *chess.Board, budget int) (int, error) {
+	s.unrestricted = true
+	defer func() { s.unrestricted = false }()
+	root, _, ok, err := s.attacker(b, budget, s.limit.MaxNodes, []*chess.Board{b}, nil)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, errors.New("no proven mate within search limit")
+	}
+	return measure(root, nil).depth, nil
+}
+
 func Compile(ctx context.Context, src Source, limits Limits) (Definition, Report, error) {
 	start := time.Now()
 	report := Report{Slot: src.Slot, Status: "rejected", FEN: src.FEN}
@@ -195,7 +224,12 @@ func Compile(ctx context.Context, src Source, limits Limits) (Definition, Report
 	ctx, cancel := context.WithTimeout(ctx, limits.MaxDuration)
 	defer cancel()
 	s := search{ctx: ctx, limit: limits, solver: b.SideToMove}
-	root, _, ok, err := s.attacker(b, src.Mate, 1, []*chess.Board{b}, nil)
+	depth, err := s.shortest(b, src.Mate)
+	if err != nil {
+		report.Nodes = s.nodes
+		return fail(err)
+	}
+	root, _, ok, err := s.attacker(b, depth, 1, []*chess.Board{b}, nil)
 	report.Nodes = s.nodes
 	if err != nil {
 		return fail(err)
@@ -206,7 +240,7 @@ func Compile(ctx context.Context, src Source, limits Limits) (Definition, Report
 		}
 		return fail(errors.New("no proven mate within declared budget"))
 	}
-	d := Definition{Slot: src.Slot, FEN: b.Fen(), Solver: src.Solver, Mate: src.Mate, Title: src.Title, Provenance: src.Provenance, License: src.License, Root: root}
+	d := Definition{Slot: src.Slot, FEN: b.Fen(), Solver: src.Solver, Mate: depth, Title: src.Title, Provenance: src.Provenance, License: src.License, Root: root}
 	stats := measure(root, nil)
 	d.Forks, d.Lines, d.Decisions = stats.forks, stats.lines, stats.decisions
 	d.Digest = ContentDigest(d)

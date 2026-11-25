@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/google/uuid"
@@ -9,6 +10,27 @@ import (
 	"github.com/razzie-cloud/chess/internal/store"
 	"github.com/razzie-cloud/chess/tests/browser"
 )
+
+func TestBrowserPuzzleNumbering(t *testing.T) {
+	if os.Getenv("CHROMIUM_EXECUTABLE_PATH") == "" {
+		t.Skip("set CHROMIUM_EXECUTABLE_PATH for puzzle browser acceptance")
+	}
+	s := httpStore(t)
+	if err := s.Seed(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	f := newHTTPFixture(t, s)
+	b := browserFixture(t, f)
+	for _, theme := range []string{"light", "dark"} {
+		b.Call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}})
+		for _, width := range []int{320, 390, 768, 1440} {
+			b.Viewport(width, 1000)
+			b.Navigate(f.cfg.Origin + "/puzzles/razchess-mates-v1")
+			b.Run(`const links=[...el('.puzzle-grid').querySelectorAll('a')];assert(links.length===206,'collection size');for(let i=0;i<links.length;i++)assert(links[i].textContent.trim()===String(i+1),'nonsequential puzzle number');assert(document.documentElement.scrollWidth<=innerWidth,'collection overflow at ` + strconv.Itoa(width) + `');window.shell=el('header');links[50].click();await wait(()=>document.querySelector('.puzzle-preview img'));assert(el('h1').textContent==='Mate challenge 51','detail number differs');assert(location.pathname.endsWith('/50'),'puzzle ID is not consecutive');assert(el('.puzzle-preview').previousElementSibling.textContent.startsWith('Mate in 2,'),'detail mate length');assert(el('header')===shell,'puzzle navigation replaced shell');assert(document.documentElement.scrollWidth<=innerWidth,'detail overflow');`)
+		}
+	}
+	b.AssertNoErrors()
+}
 
 func TestBrowserPuzzleRejectedMovesConflictRefreshAndEndedControls(t *testing.T) {
 	if os.Getenv("CHROMIUM_EXECUTABLE_PATH") == "" {
@@ -61,7 +83,7 @@ func TestBrowserPuzzleRejectedMovesConflictRefreshAndEndedControls(t *testing.T)
 	b.Run(`assert(el('#attempt-state').dataset.status==='solved','all-lines completion absent');assert(!document.querySelector('.puzzle-move'),'solved form remains');assert(el('form[action$="/end"] button').disabled,'solved attempt can resign');assert(cspErrors.length===0,JSON.stringify(cspErrors));`)
 	b.Run(`window.beforeDestroy=window.testDestroyed||0;el('.app-nav a[href=\"/puzzles\"]').click();await wait(()=>location.pathname==='/puzzles'&&!document.querySelector('#puzzle-panel'));assert(testDestroyed-beforeDestroy===3,'attempt boards not destroyed on navigation');el('#main a[href=\"/puzzles/razchess-mates-v1\"]').click();await wait(()=>document.querySelector('.puzzle-grid'));el('.puzzle-grid a[href$=\"/0\"]').click();await wait(()=>document.querySelector('.puzzle-preview img'));window.previewBefore=testDestroyed;el('.app-nav a[href=\"/matches/new\"]').click();await wait(()=>location.pathname==='/matches/new');assert(testDestroyed===previewBefore+1,'preview board not destroyed on navigation');`)
 	// Ended attempts preserve their board and exports, with no native move form.
-	ended, err := s.StartAttempt(t.Context(), f.owner, a.CollectionID, 35, uuid.NewString(), false)
+	ended, err := s.StartAttempt(t.Context(), f.owner, a.CollectionID, 34, uuid.NewString(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

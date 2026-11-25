@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,33 @@ import (
 	"github.com/razzie-cloud/chess/internal/puzzle"
 	"github.com/razzie-cloud/chess/internal/store"
 )
+
+func TestPuzzleNumbersAndIDsAreSequential(t *testing.T) {
+	s := httpStore(t)
+	if err := s.Seed(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	f := newHTTPFixture(t, s)
+	r := httptest.NewRequest("GET", f.cfg.Origin+"/puzzles/razchess-mates-v1", nil)
+	f.sign(r, f.owner, false)
+	w := response(f.handler, r)
+	links := regexp.MustCompile(`<a class="" href="/puzzles/razchess-mates-v1/(\d+)" title="([^"]+)">(\d+)</a>`).FindAllStringSubmatch(w.Body.String(), -1)
+	if w.Code != 200 || len(links) != 206 {
+		t.Fatalf("puzzle collection: status %d, %d links", w.Code, len(links))
+	}
+	for i, link := range links {
+		number := strconv.Itoa(i + 1)
+		if link[1] != strconv.Itoa(i) || link[3] != number || link[2] != "Mate challenge "+number {
+			t.Fatalf("puzzle %s displayed as %q, %q", number, link[2], link[3])
+		}
+	}
+	r = httptest.NewRequest("GET", f.cfg.Origin+"/puzzles/razchess-mates-v1/50", nil)
+	f.sign(r, f.owner, false)
+	w = response(f.handler, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "<h1>Mate challenge 51</h1>") || !strings.Contains(w.Body.String(), "Mate in 2, playing Black") {
+		t.Fatal("detail heading does not match the collection number")
+	}
+}
 
 func TestPuzzleSignedHTTPAlternatesReplicasAndKeepsSolutionsPrivate(t *testing.T) {
 	s := httpStore(t)

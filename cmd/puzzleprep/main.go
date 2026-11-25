@@ -130,7 +130,7 @@ func run(args []string) error {
 		manifest := fs.String("manifest", "puzzles/source.json", "source manifest")
 		collection := fs.String("collection", "", "permanent collection edition")
 		slot := fs.Int("slot", -1, "permanent slot 0..255 (first slot for import)")
-		mate := fs.Int("mate", 0, "explicit solver move limit 1..5")
+		mate := fs.Int("mate", puzzle.DefaultLimits().MaxMate, "maximum solver moves to search (1..5); mate length is calculated")
 		fen := fs.String("fen", "", "six-field FEN for add")
 		input := fs.String("input", "", "newline-FEN file for import")
 		title := fs.String("title", "", "puzzle title")
@@ -140,7 +140,7 @@ func run(args []string) error {
 			return err
 		}
 		if !puzzle.ValidCollectionID(*collection) || *slot < 0 || *slot > 255 || *mate < 1 || *mate > 5 {
-			return errors.New("collection, slot in 0..255 and mate limit in 1..5 are required")
+			return errors.New("collection, slot in 0..255 and search limit in 1..5 are required")
 		}
 		m := puzzle.Manifest{Version: puzzle.FormatVersion}
 		if err := readJSON(*manifest, &m); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -178,6 +178,11 @@ func run(args []string) error {
 					return fmt.Errorf("slot %d is already assigned", src.Slot)
 				}
 			}
+			depth, err := puzzle.FindMate(context.Background(), src, puzzle.DefaultLimits())
+			if err != nil {
+				return fmt.Errorf("source entry %d: %w", i+1, err)
+			}
+			src.Mate = depth
 			m.Collections[index].Entries = append(m.Collections[index].Entries, src)
 		}
 		return writeJSON(*manifest, m)

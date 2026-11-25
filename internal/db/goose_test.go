@@ -113,7 +113,7 @@ func TestSlotBoundsAndAtomicProgress(t *testing.T) {
 	if _, err := database.ExecContext(ctx, `INSERT INTO puzzle_collections(id,title) VALUES('fixture-v1','Fixture')`); err != nil {
 		t.Fatal(err)
 	}
-	insert := `INSERT INTO puzzles(collection_id,slot,initial_fen,solver_color,mate_limit,solution,content_digest,fork_count,line_count) VALUES('fixture-v1',$1,'fixture','w',1,'{}','fixture',0,1)`
+	insert := `INSERT INTO puzzles(collection_id,slot,initial_fen,solver_color,mate_in,solution,content_digest,fork_count,line_count) VALUES('fixture-v1',$1,'fixture','w',1,'{}','fixture',0,1)`
 	for _, slot := range []int{0, 255} {
 		if _, err := database.ExecContext(ctx, insert, slot); err != nil {
 			t.Fatal(err)

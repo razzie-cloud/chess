@@ -102,6 +102,9 @@ func Validate(d Definition) error {
 	if stats.forks != d.Forks || stats.lines != d.Lines || stats.decisions != d.Decisions {
 		return errors.New("proof metadata counts disagree with replay")
 	}
+	if stats.depth != d.Mate {
+		return errors.New("mate length disagrees with proof depth")
+	}
 	if d.Digest != ContentDigest(d) {
 		return errors.New("content digest mismatch")
 	}

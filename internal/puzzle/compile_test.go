@@ -41,7 +41,7 @@ func proof(t *testing.T, slot int) Definition {
 }
 
 func TestCompileForcedAndForks(t *testing.T) {
-	for _, tc := range []struct{ slot, forks, lines int }{{0, 0, 1}, {9, 1, 2}, {35, 1, 3}, {15, 1, 3}} {
+	for _, tc := range []struct{ slot, forks, lines int }{{0, 0, 1}, {9, 1, 2}, {34, 1, 3}} {
 		d := proof(t, tc.slot)
 		if d.Forks != tc.forks || d.Lines != tc.lines {
 			t.Fatalf("slot %d counts: forks=%d lines=%d", tc.slot, d.Forks, d.Lines)
@@ -54,6 +54,43 @@ func TestCompileForcedAndForks(t *testing.T) {
 		b, _ := json.Marshal(again)
 		if string(a) != string(b) {
 			t.Fatal("compilation is not deterministic")
+		}
+	}
+}
+
+func TestMateLengthIsCalculatedBeforeApplyingBoardLimits(t *testing.T) {
+	src := fixture(t, 0)
+	src.Mate = 5
+	d, report, err := Compile(t.Context(), src, DefaultLimits())
+	if err != nil || d.Mate != 2 || report.Mate != 2 {
+		t.Fatalf("mate-in-two was labeled with the search ceiling: %d, %d, %v", d.Mate, report.Mate, err)
+	}
+	src.FEN = "r2qrb2/p1pn1Qp1/1p4Nk/4PR2/3n4/7N/P5PP/R6K w - - 1 1"
+	depth, err := FindMate(t.Context(), src, DefaultLimits())
+	if err != nil || depth != 2 {
+		t.Fatalf("original source 15 must be mate in two: %d %v", depth, err)
+	}
+	if _, _, err := Compile(t.Context(), src, DefaultLimits()); err == nil {
+		t.Fatal("a longer solution bypassed the shortest mate's board limit")
+	}
+}
+
+func TestOriginalPositionsAreAllMateInTwo(t *testing.T) {
+	data, err := os.ReadFile("../../puzzles/legacy-razchess.fen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	positions := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(positions) != 220 {
+		t.Fatalf("original position count: %d", len(positions))
+	}
+	limits := DefaultLimits()
+	limits.MaxDuration = 30 * time.Second // Race instrumentation slows the full legacy audit.
+	for i, fen := range positions {
+		src := Source{Slot: i, FEN: fen, Solver: strings.Fields(fen)[1], Mate: 5}
+		depth, err := FindMate(t.Context(), src, limits)
+		if err != nil || depth != 2 {
+			t.Fatalf("original position %d: mate %d, %v", i, depth, err)
 		}
 	}
 }
@@ -82,7 +119,7 @@ func TestSecondForkRejectedAndAlternativeStrategyChosen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if valid.Forks != 1 || valid.Lines != 2 {
+	if valid.Mate != 3 || valid.Forks != 1 || valid.Lines != 2 {
 		t.Fatal("compiler did not choose the alternative single-fork strategy")
 	}
 }
@@ -172,6 +209,7 @@ func TestVerifyRejectsMalformedTree(t *testing.T) {
 		func(d *Definition) { d.Forks = 0 },
 		func(d *Definition) { d.Digest = "wrong" },
 		func(d *Definition) { d.Mate = 1 },
+		func(d *Definition) { d.Mate++; d.Digest = ContentDigest(*d) },
 		func(d *Definition) { d.Root.Replies[0].Next.Replies = []Reply{{Move: "a1a2", Next: &Node{}}} },
 	} {
 		d := proof(t, 9)
@@ -256,7 +294,12 @@ func TestBundledSeedAndDeterministicRecompilation(t *testing.T) {
 	if string(x) != string(y) {
 		t.Fatal("bundled seed drift")
 	}
-	if got := len(b.Collections[0].Puzzles); got != 207 {
+	if got := len(b.Collections[0].Puzzles); got != 206 {
 		t.Fatalf("published count changed: %d", got)
+	}
+	for i, d := range b.Collections[0].Puzzles {
+		if d.Slot != i || d.Mate != 2 {
+			t.Fatalf("puzzle %d has slot %d, mate %d", i+1, d.Slot, d.Mate)
+		}
 	}
 }

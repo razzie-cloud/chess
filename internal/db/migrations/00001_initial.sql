@@ -88,7 +88,7 @@ CREATE TABLE puzzles (
     slot smallint NOT NULL CHECK (slot BETWEEN 0 AND 255),
     initial_fen text NOT NULL,
     solver_color text NOT NULL CHECK (solver_color IN ('w','b')),
-    mate_limit integer NOT NULL CHECK (mate_limit BETWEEN 1 AND 16),
+    mate_in integer NOT NULL CHECK (mate_in BETWEEN 1 AND 5),
     title text NOT NULL DEFAULT '',
     solution jsonb NOT NULL,
     content_digest text NOT NULL,

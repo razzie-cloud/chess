@@ -19,7 +19,10 @@ POST Origin, bound request bodies and never log tokens, URLs or backend errors.
 Matches never expire automatically. Only their creator can delete them. Retain
 creation tombstones after deletion; grants, moves and presence must cascade.
 Guest authorization rechecks current generation and expiry on every operation.
-Puzzle slots and published definitions are immutable; a content correction needs
+The unreleased collection has 206 calculated mate-in-two puzzles at consecutive
+slots 0–205; original indices remain in provenance. Import calculates shortest
+mate length before publication applies the three-board limit. After release,
+puzzle slots and published definitions are immutable; a content correction needs
 a new collection edition. Completion bits only change from zero to one in SQL.
 
 Frontend uses escaped embedded Go templates, local HTMX/PicoCSS/chessboard.js and

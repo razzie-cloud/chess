@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/razzie-cloud/chess/internal/db"
+	"github.com/razzie-cloud/chess/internal/game"
 	"github.com/razzie-cloud/chess/internal/puzzle"
 )
 
@@ -18,7 +19,7 @@ func fixtureBundle(t *testing.T) puzzle.Bundle {
 	}
 	var selected []puzzle.Definition
 	for _, d := range b.Collections[0].Puzzles {
-		if d.Slot == 0 || d.Slot == 9 || d.Slot == 35 {
+		if d.Slot == 0 || d.Slot == 9 || d.Slot == 34 {
 			selected = append(selected, d)
 		}
 	}
@@ -216,6 +217,71 @@ func TestPuzzleForkRequiresEveryLineAndReplaysRetiredTransitions(t *testing.T) {
 	}
 }
 
+func TestPuzzle15AcceptsBishopAndQueenMates(t *testing.T) {
+	for _, uci := range []string{"d3g6", "h5g6"} {
+		t.Run(uci, func(t *testing.T) {
+			s := isolatedStore(t, 1)
+			if err := s.Seed(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			a := startPuzzle(t, s, uuid.NewString(), "razchess-mates-v1", 14)
+			a = stepPuzzle(t, s, a, a.Branches[0])
+			branch := a.Branches[1] // 1.Qxh5+ Rg6, leaving the queen on h5.
+			in := prescribed(t, s, a, branch)
+			for _, wrong := range []string{"h5h4", "h5e8", "z9z9"} {
+				in.UCI = wrong
+				if _, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in); !errors.Is(err, ErrInvalid) {
+					t.Fatalf("non-mating move %s accepted: %v", wrong, err)
+				}
+			}
+			in.UCI = uci
+			next, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if next.Status != "active" || next.Revision != a.Revision+1 {
+				t.Fatal("one mate must leave the other defense pending")
+			}
+			a, err = s.Attempt(t.Context(), a.ID, a.OwnerID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			played, err := a.PlayedBranch(branch.ID)
+			if err != nil || played.Status != "solved" || played.Path[len(played.Path)-1] != uci {
+				t.Fatalf("actual mate was not saved: %+v %v", played, err)
+			}
+			g, err := game.Replay(a.InitialFEN, played.Path, false)
+			if err != nil || g.Reason != "checkmate" || g.Board.Fen() != played.FEN {
+				t.Fatalf("saved mate does not replay: %v", err)
+			}
+			cards, err := s.Collections(t.Context(), a.OwnerID)
+			if err != nil || cards[0].Solved != 0 {
+				t.Fatal("one mate awarded collection progress")
+			}
+			retry, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in)
+			if err != nil || retry.Revision != a.Revision {
+				t.Fatalf("mate retry changed state: %v", err)
+			}
+			a = solvePuzzle(t, s, a)
+			retry, err = s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in)
+			if err != nil || retry.Status != "solved" || retry.Revision != a.Revision {
+				t.Fatalf("completed mate retry failed: %v", err)
+			}
+			in.UCI = "d3g6"
+			if uci == in.UCI {
+				in.UCI = "h5g6"
+			}
+			if _, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in); !errors.Is(err, ErrPayload) {
+				t.Fatal("changed mate retry accepted")
+			}
+			cards, err = s.Collections(t.Context(), a.OwnerID)
+			if err != nil || cards[0].Solved != 1 {
+				t.Fatal("both mates did not award collection progress")
+			}
+		})
+	}
+}
+
 func TestPuzzleParallelBitsSlotsZeroAnd255AndRequestReceipts(t *testing.T) {
 	s := isolatedStore(t, 4)
 	collection := seedFixture(t, s)
@@ -275,16 +341,16 @@ func TestPuzzleThreeReplyForkRestartAndOneConnectionPool(t *testing.T) {
 	s := isolatedStore(t, 1)
 	collection := seedFixture(t, s)
 	owner := uuid.NewString()
-	a := startPuzzle(t, s, owner, collection, 35)
+	a := startPuzzle(t, s, owner, collection, 34)
 	a = stepPuzzle(t, s, a, a.Branches[0])
 	if len(a.Branches) != 4 {
 		t.Fatal("three defenses not materialized")
 	}
-	resumed := startPuzzle(t, s, owner, collection, 35)
+	resumed := startPuzzle(t, s, owner, collection, 34)
 	if resumed.ID != a.ID || resumed.Revision != a.Revision {
 		t.Fatal("partial attempt did not resume")
 	}
-	restarted, err := s.StartAttempt(t.Context(), owner, collection, 35, uuid.NewString(), true)
+	restarted, err := s.StartAttempt(t.Context(), owner, collection, 34, uuid.NewString(), true)
 	if err != nil || restarted.ID == a.ID {
 		t.Fatal("restart did not make fresh attempt")
 	}

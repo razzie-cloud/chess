@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/razzie-cloud/chess/internal/db"
+	"github.com/razzie-cloud/chess/internal/game"
 	"github.com/razzie-cloud/chess/internal/puzzle"
 )
 
@@ -88,7 +89,7 @@ func (s *Store) SeedBundle(ctx context.Context, data []byte) error {
 				return err
 			}
 			encoded, _ := json.Marshal(d)
-			if _, err = tx.ExecContext(ctx, `INSERT INTO puzzles(collection_id,slot,initial_fen,solver_color,mate_limit,title,solution,content_digest,fork_count,line_count) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, c.ID, d.Slot, d.FEN, d.Solver, d.Mate, d.Title, string(encoded), d.Digest, d.Forks, d.Lines); err != nil {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO puzzles(collection_id,slot,initial_fen,solver_color,mate_in,title,solution,content_digest,fork_count,line_count) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, c.ID, d.Slot, d.FEN, d.Solver, d.Mate, d.Title, string(encoded), d.Digest, d.Forks, d.Lines); err != nil {
 				return err
 			}
 		}
@@ -360,7 +361,20 @@ func (s *Store) PuzzleMove(ctx context.Context, id, owner string, in PuzzleMove)
 		return a, ErrConflict
 	}
 	if node.Move != in.UCI {
-		return a, fmt.Errorf("%w Not the solution move.", ErrInvalid)
+		board, err := game.ValidateFEN(node.FEN)
+		if err != nil {
+			return a, err
+		}
+		move, err := game.LegalMove(board, in.UCI, false)
+		if err != nil || move.Uci(board) != in.UCI {
+			return a, fmt.Errorf("%w Not the solution move.", ErrInvalid)
+		}
+		after := board.MakeMove(move)
+		if check, mate := after.IsCheckOrMate(); !check || !mate {
+			return a, fmt.Errorf("%w Not the solution move.", ErrInvalid)
+		}
+		// Immediate mate needs no continuation from the prepared proof.
+		node = &puzzle.Node{FEN: node.FEN, Move: in.UCI, After: after.Fen()}
 	}
 	played := append(append([]string(nil), in.Path...), node.Move)
 	remaining := branch.Remaining - 1

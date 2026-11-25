@@ -49,8 +49,8 @@ cmp internal/opening/eco.tsv /tmp/razcloud-chess-final-eco.tsv
 ```
 
 All 3,397 original ECO records normalize without rejection. The reviewed puzzle
-bundle contains 207 accepted positions, with 13 rejected source entries retained
-as drafts in their original permanent slots. No proof or opening artifact drift
+bundle was subsequently rebuilt with 206 calculated mate-in-two positions at
+consecutive slots 0–205; 14 unsupported original positions are excluded. No proof or opening artifact drift
 was found. See [puzzle preparation](../puzzles/README.md) and
 [rules compatibility](rules-compatibility.md) for detailed counts and provenance.
 
@@ -207,3 +207,25 @@ Physical authenticators, host-browser networking outside this machine, productio
 DNS/TLS and the actual Swarm cutover remain release-environment checks. Legacy
 rooms/ownership are not imported. Release prerequisites and rollback are in
 [the reference](reference.md#release) and the parent/infra operations documents.
+
+## Puzzle mate lengths and consecutive IDs — 2026-11-25
+
+The importer calculates the shortest forced mate within bounded search before
+publication checks the single-fork, three-board limit. Compilation never replaces
+an unsupported shortest strategy with a longer line. All 220 original positions
+were verified as mate in two; the 206 supported positions now use consecutive
+slots 0–205 and visible numbers/titles 1–206. The initial migration stores exact
+`mate_in` values in the range 1–5. No additional migration was added.
+
+Build, vet, full tests with disposable PostgreSQL, the maintained Chromium
+browser suite and the full race suite passed. Browser checks include both themes at 320/390/768/1440,
+consecutive links/titles, exact mate labels, HTMX navigation and existing puzzle
+moves/retries/completion. Puzzle screenshots were refreshed and visually reviewed.
+The full legacy-position test allows 30 seconds per entry for race instrumentation;
+the production search timeout remains five seconds.
+
+Only the local Chess puzzle tables and their receipts were reset. The existing
+match was retained, and the old four puzzle attempts and one progress row were
+cleared. The rebuilt local Chess service imported 206 mate-in-two definitions,
+became healthy and retained the Caddy sign-in redirect. The actual Gateway login
+flow was not repeated. No production deployment or publication was performed.

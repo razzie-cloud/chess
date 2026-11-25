@@ -22,8 +22,8 @@ deployment, Docker context change or operator environment edit was performed.
 | 2 — rules and openings | Strict UCI/FEN, legal Chess960 generation/castling, PGN import/export/result conflicts, terminal outcomes and history-aware repetition. All 3,397 original ECO records replay; deepest recognition survives departure, imports and reconstruction. |
 | 3 — matches and authorization | Owner setup, guest fragment exchange, distinct 30-day per-match sessions, independent rotating view grants, own-color moves/resignation, durable receipts, permanent matches, indexed Sessions/Archive and confirmed deletion/tombstones. PostgreSQL race, replay, ownership and retention fixtures pass. |
 | 4 — persistent interface | Stable board/menu/promotion nodes, revision-guarded state swaps, unchanged 204 polls, pending moves, polling/backoff/visibility lifecycle, opening/history/status, native controls, accessible UCI/castles, annotations and local sounds. Browser fixtures cover 30 unchanged polls, remote moves, old responses, promotion cancellation/underpromotion, castling and HTMX navigation/drafts. |
-| 5 — puzzle preparation | Offline add/import/compile/verify/screen commands; deterministic bounded AND/OR proof and independent validation; all legal defenses; global one-fork rule; immutable slots and transactionally imported seeds. 207 accepted positions publish in their original slots; 13 rejected positions remain drafts. |
-| 6 — puzzle gameplay | Owned resumable attempts, exact prescribed moves, at most three live boards, source-path transition receipts and atomic `BIT(256)` completion after every line. Tests cover stale tabs, retired/final retries, wrong owners, forged paths, repeated solves, editions, concurrent bits 0/255 and rejected slot 256. |
+| 5 — puzzle preparation | Offline add/import/compile/verify/screen commands; deterministic bounded AND/OR proof and independent validation; all legal defenses; global one-fork rule; immutable slots and transactionally imported seeds. 206 calculated mate-in-two positions publish at consecutive slots 0–205; 14 original positions exceeding the shortest solution’s board limit are excluded. |
+| 6 — puzzle gameplay | Owned resumable attempts, prescribed moves or any legal immediate checkmate, at most three live boards, source-path transition receipts and atomic `BIT(256)` completion after every line. Tests cover puzzle 15's bishop/queen mates, stale tabs, retired/final retries, wrong owners, forged paths, repeated solves, editions, concurrent bits 0/255 and rejected slot 256. |
 | 7 — original feature parity | All eleven menu items appear in match and puzzle contexts; owner/guest/viewer permissions differ appropriately. Custom editor, FEN counters/rights, PGN error drafts, clipboard fallback, independent links, branch-selected exports and viewer toggle are present. GIF fixtures decode capture, en passant, castling and promotion positions; downloads retain artwork attribution. |
 | 8 — platform/release preparation | Parent Compose/Caddy/auth policies and tokenless reset; Chess PostgreSQL broker grant; Swarm service/tags/helper readiness/reset; six-service image selection; landing card; CI; licenses; backup/cutover/rollback docs. Legacy extra definition removed from discovery, with its rollback broker grant retained. Offline checks and real local image readiness pass. |
 | 9 — whole-system acceptance | Database-backed unit/integration/race and production-CSP browser fixtures exercise reconstructed independent handlers, alternate puzzle requests and persistent state. Real Gateway/Caddy acceptance and the final command record are documented in the service verification files. Production release remains an operator action. |
@@ -38,20 +38,19 @@ platform helper suite has 122 passing checks, including its race run.
 
 ## Puzzle content decision
 
-The reviewed manifest uses a declared mate limit of three. Of the 220 original
-positions, 207 satisfy the full proof and single-fork rules; 13 remain explicit
-drafts, with rejection reasons and offending positions retained. Original source
-indices map to permanent slots without renumbering or silent omissions. The
-edition is `razchess-mates-v1` and has gaps where drafts are excluded.
+The unreleased collection was rebuilt with exact mate lengths and consecutive
+IDs. All 220 original positions are mate in two; 206 have a shortest strategy
+within the global single-fork, three-board limit. The other 14 are excluded.
+In particular, original index 15 requires 27 defenses for its mate-in-two line;
+the old compiler's longer three-move substitute is rejected.
 
-At mate limit two, 206 positions prove (138 forced-line and 68 fork positions).
-Limits three, four and five each accept 207; the additional position needs three
-solver decisions along its longest line. Maximum accepted complete lines is
-three, maximum total solver decisions is five, and screening recorded no search
-budget exhaustion. Fixtures include forced, two-way and three-way solutions,
-promotion/castling, a rejected true second fork and a rejected four-reply defense.
-See [`puzzles/README.md`](../../puzzles/README.md), source manifests,
-screening reports and the deterministic compiled seed for the complete record.
+The selected source manifest and seed contain slots 0–205, displayed as 1–206,
+with original indices retained in provenance. There are 138 single-line,
+60 two-line and eight three-line puzzles. Import calculates mate length without
+an explicit depth, and compilation searches the shortest unrestricted mate before
+applying board limits. A search ceiling never becomes the displayed difficulty.
+See [`puzzles/README.md`](../../puzzles/README.md), the historical screening reports
+and deterministic compiled seed for provenance and the former screening results.
 
 The old audio samples lacked independent provenance. They were replaced with
 reproducible original tones; feedback categories remain. The twelve piece images

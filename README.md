@@ -60,8 +60,8 @@ The browser fixtures use real signed identity assertions and local key discovery
 and Caddy flow.
 
 The preparation command recompiles selected entries deterministically. The
-bundled collection contains 207 accepted original positions; 13 rejected entries
-remain drafts in their original slots. See [puzzle onboarding](puzzles/README.md)
+bundled collection contains 206 calculated mate-in-two positions, numbered
+1–206; 14 positions exceeding the shortest solution’s board limit are excluded. See [puzzle onboarding](puzzles/README.md)
 and [rules/opening compatibility](docs/rules-compatibility.md). All 3,397 original
 ECO records are retained and normalized locally.
 

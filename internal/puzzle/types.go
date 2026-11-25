@@ -11,7 +11,7 @@ import (
 )
 
 const FormatVersion = 1
-const CompilerVersion = "single-fork-v1"
+const CompilerVersion = "single-fork-v2"
 
 type Manifest struct {
 	Version     int                `json:"version"`
