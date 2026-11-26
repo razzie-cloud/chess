@@ -86,5 +86,7 @@ All three new-game forms support guests or five fixed Stockfish difficulties.
 The optional private worker uses one thread with a bounded queue; Chess persists
 bot turns and validates webhook moves transactionally. Build the worker with
 `docker build -f Dockerfile.bot -t razcloud-stockfish:local .`, or use the parent
-repository's `docker-compose.bot.yml` override for a 1.25 CPU / 512 MiB setup.
+repository's ordinary `docker compose up --build -d` for a 1.25 CPU / 512 MiB
+setup. Its main stack includes the worker; set a random 32+ character
+`CHESS_BOT_TOKEN` in the parent's ignored `.env` before starting.
 See [configuration, API and design](docs/plans/2026-11-26-stockfish-bot.md).

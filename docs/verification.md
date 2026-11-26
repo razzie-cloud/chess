@@ -555,3 +555,21 @@ image-selection fixtures, shell syntax, YAML parsing and whitespace checks passe
 No production daemon was contacted, no secrets were created on a real Swarm,
 and no images were published or deployed. The new release must publish both
 companion images before deployment selects it.
+
+### Default local Compose — 27 November 2026
+
+Stockfish now belongs to the ordinary parent `docker-compose.yml`; the bot-only
+override was removed. Chess and worker environment/resource settings match the
+previous merged configuration exactly. The main-stack, storage-demo and legacy
+broker-auth configurations all validate, and a parsed before/after comparison
+confirmed no effective configuration change. Limits, private networking and the
+shared token were checked in both auth modes. The existing local containers
+remain healthy when managed through ordinary `docker compose up`; no rebuild or
+recreation was required. Caddy can reach Chess and serves the public bootstrap.
+
+Three idle Docker stats snapshots reported 0.00% CPU and approximately 7 MiB RAM.
+A 13-second cgroup sample averaged 0.28% of one CPU including health checks;
+anonymous memory was about 4.5 MiB, process RSS 11 MiB, and file cache 86 MiB.
+Recent searches and cache pressure can change idle readings. These observations
+do not replace the existing active-load check. No Go code changed, so Go/browser
+suites were not repeated for this Compose/documentation consolidation.

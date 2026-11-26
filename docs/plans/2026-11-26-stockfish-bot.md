@@ -162,12 +162,13 @@ From the parent repository, set a fresh `CHESS_BOT_TOKEN` in the existing ignore
 `.env` (generate with `openssl rand -hex 32`), then use:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.bot.yml up --build -d chess stockfish
+docker compose up --build -d chess stockfish
 ```
 
-The override builds `chess/Dockerfile.bot`, joins only the private backend network,
-sets both directions' URLs and token, and applies the hard CPU/RAM/process limits.
-It also works after the `docker-compose.none.yml` broker-auth override. No host
+The main Compose file includes the worker and builds `chess/Dockerfile.bot`. It
+joins only the private backend network, sets both directions' URLs and token, and
+applies the hard CPU/RAM/process limits.
+It is also included with the `docker-compose.none.yml` broker-auth override. No host
 ports, public routes or new persistence volumes are added. Source changes to the
 worker require rebuilding its image; Chess continues using its existing Air setup.
 
