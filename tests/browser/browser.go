@@ -3,6 +3,7 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -88,6 +89,8 @@ func Start(route func(Request) Response) *Browser {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	b := &Browser{profile: profile, cancel: cancel, pending: map[int64]chan message{}, closed: make(chan struct{})}
 	b.cmd = exec.CommandContext(ctx, binary, "--headless", "--no-sandbox", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1", "--user-data-dir="+profile, "--autoplay-policy=no-user-gesture-required", "about:blank")
+	var stderr bytes.Buffer
+	b.cmd.Stderr = &stderr
 	if e = b.cmd.Start(); e != nil {
 		b.Close()
 		panic(e)
@@ -97,18 +100,13 @@ func Start(route func(Request) Response) *Browser {
 	defer func() {
 		if !started {
 			b.Close()
+			if stderr.Len() > 0 {
+				fmt.Fprintf(os.Stderr, "Chromium startup stderr:\n%s\n", stderr.String())
+			}
 		}
 	}()
-	var port string
 	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		raw, e := os.ReadFile(filepath.Join(profile, "DevToolsActivePort"))
-		if e == nil {
-			port = strings.SplitN(string(raw), "\n", 2)[0]
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
+	port := waitDevToolsPort(filepath.Join(profile, "DevToolsActivePort"), deadline)
 	if port == "" {
 		panic("Chromium did not start; check CHROMIUM_EXECUTABLE_PATH")
 	}
@@ -150,6 +148,19 @@ func Start(route func(Request) Response) *Browser {
 	b.Call("Fetch.enable", map[string]any{"patterns": []any{map[string]any{"urlPattern": "*"}}})
 	started = true
 	return b
+}
+func waitDevToolsPort(path string, deadline time.Time) string {
+	for time.Now().Before(deadline) {
+		raw, err := os.ReadFile(path)
+		if err == nil {
+			// Chromium creates the file before it finishes writing the port line.
+			if port, _, complete := strings.Cut(string(raw), "\n"); complete && port != "" {
+				return port
+			}
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return ""
 }
 func (b *Browser) receive(route func(Request) Response) {
 	defer close(b.closed)
