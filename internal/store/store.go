@@ -18,6 +18,7 @@ import (
 	"github.com/go-rel/rel"
 	"github.com/go-rel/rel/where"
 	"github.com/google/uuid"
+	"github.com/razzie-cloud/chess/internal/bot"
 	"github.com/razzie-cloud/chess/internal/game"
 )
 
@@ -41,6 +42,7 @@ type Match struct {
 	InitialFEN                                                string `db:"initial_fen"`
 	CurrentFEN                                                string `db:"current_fen"`
 	Revision                                                  int64
+	BotLevel                                                  int
 	Status, Result, Reason                                    string
 	Tags                                                      json.RawMessage
 	CreatedAt, UpdatedAt                                      time.Time
@@ -64,6 +66,8 @@ type Setup struct {
 	Name, CreatorName, Color, Mode, FEN, PGN string
 	// Omit absent selections to preserve creation receipts from older clients.
 	Chess960Index string `json:",omitempty"`
+	Opponent      string `json:",omitempty"`
+	BotLevel      int    `json:",omitempty"`
 }
 type Created struct {
 	ID, PlayingToken, ViewToken string
@@ -101,15 +105,26 @@ func other(c string) string {
 
 type scanner interface{ Scan(...any) error }
 
-const columns = `id,creator_id,creator_name,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,created_at,updated_at,completed_at`
+const columns = `id,creator_id,creator_name,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,created_at,updated_at,completed_at,bot_level`
 
 func scanMatch(row scanner) (m Match, e error) {
-	e = row.Scan(&m.ID, &m.CreatorID, &m.CreatorName, &m.CreatorColor, &m.GuestName, &m.Mode, &m.InitialFEN, &m.CurrentFEN, &m.Revision, &m.Status, &m.Result, &m.Reason, &m.Tags, &m.CreatedAt, &m.UpdatedAt, &m.CompletedAt)
+	e = row.Scan(&m.ID, &m.CreatorID, &m.CreatorName, &m.CreatorColor, &m.GuestName, &m.Mode, &m.InitialFEN, &m.CurrentFEN, &m.Revision, &m.Status, &m.Result, &m.Reason, &m.Tags, &m.CreatedAt, &m.UpdatedAt, &m.CompletedAt, &m.BotLevel)
 	return
 }
 
 func (s *Store) Create(ctx context.Context, owner, request string, setup Setup) (Created, error) {
 	var out Created
+	if setup.Opponent != "" && setup.Opponent != "guest" && setup.Opponent != "bot" {
+		return out, ErrInvalid
+	}
+	if setup.Opponent == "bot" {
+		if setup.BotLevel < 1 || setup.BotLevel > 5 {
+			return out, ErrInvalid
+		}
+		setup.Name = bot.Name(setup.BotLevel)
+	} else if setup.BotLevel != 0 {
+		return out, ErrInvalid
+	}
 	if !validID(owner) || !validID(request) || setup.Name != strings.TrimSpace(setup.Name) || utf8.RuneCountInString(setup.Name) < 1 || utf8.RuneCountInString(setup.Name) > 80 || strings.ContainsAny(setup.Name, "\r\n\x00") || (setup.Color != "w" && setup.Color != "b") {
 		return out, ErrInvalid
 	}
@@ -185,16 +200,21 @@ func (s *Store) Create(ctx context.Context, owner, request string, setup Setup) 
 		setup.Mode = "chess960"
 	}
 	status := "pending"
+	if setup.Opponent == "bot" {
+		status = "active"
+	}
 	var completed any
 	if g.Result != "*" {
 		status = "completed"
 		completed = time.Now().UTC()
 	}
 	out.ID = uuid.NewString()
-	out.PlayingToken = Token()
+	if setup.BotLevel == 0 {
+		out.PlayingToken = Token()
+	}
 	out.ViewToken = Token()
 	tags, _ := json.Marshal(g.Tags)
-	if _, e = tx.ExecContext(ctx, `INSERT INTO matches(id,creator_id,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,completed_at,creator_name) VALUES($1,$2,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12,$13)`, out.ID, owner, setup.Color, setup.Name, setup.Mode, g.InitialFEN, g.Board.Fen(), status, g.Result, g.Reason, string(tags), completed, setup.CreatorName); e != nil {
+	if _, e = tx.ExecContext(ctx, `INSERT INTO matches(id,creator_id,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,completed_at,creator_name,bot_level) VALUES($1,$2,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12,$13,$14)`, out.ID, owner, setup.Color, setup.Name, setup.Mode, g.InitialFEN, g.Board.Fen(), status, g.Result, g.Reason, string(tags), completed, setup.CreatorName, setup.BotLevel); e != nil {
 		return Created{}, e
 	}
 	for i, m := range g.Moves {
@@ -202,11 +222,22 @@ func (s *Store) Create(ctx context.Context, owner, request string, setup Setup) 
 			return Created{}, e
 		}
 	}
-	if _, e = tx.ExecContext(ctx, `INSERT INTO match_guest_links(match_id,token_digest,generation,seat,revoked) VALUES($1,$2,1,$3,false)`, out.ID, Digest(out.PlayingToken), other(setup.Color)); e != nil {
-		return Created{}, e
+	if setup.BotLevel == 0 {
+		if _, e = tx.ExecContext(ctx, `INSERT INTO match_guest_links(match_id,token_digest,generation,seat,revoked) VALUES($1,$2,1,$3,false)`, out.ID, Digest(out.PlayingToken), other(setup.Color)); e != nil {
+			return Created{}, e
+		}
 	}
 	if _, e = tx.ExecContext(ctx, `INSERT INTO match_view_links(match_id,token,generation,revoked) VALUES($1,$2,1,false)`, out.ID, out.ViewToken); e != nil {
 		return Created{}, e
+	}
+	if setup.BotLevel > 0 {
+		snap, _, err := s.matchTx(ctx, tx, out.ID, Auth{Owner: owner}, true)
+		if err != nil {
+			return Created{}, err
+		}
+		if err = syncBotJob(ctx, tx, snap); err != nil {
+			return Created{}, err
+		}
 	}
 	if e = receipt(ctx, tx, owner, "create", request, digest, out.ID, 0, "created"); e != nil {
 		return Created{}, e
@@ -464,6 +495,9 @@ func (s *Store) Mutate(ctx context.Context, id string, a Auth, in Mutation) (Sna
 			return out, "", ErrDenied
 		}
 		if strings.HasPrefix(in.Action, "guest-") {
+			if out.BotLevel > 0 {
+				return out, "", ErrDenied
+			}
 			secret = Token()
 			_, e = tx.ExecContext(ctx, `UPDATE match_guest_links SET token_digest=$2,generation=generation+1,revoked=$3 WHERE match_id=$1`, id, Digest(secret), in.Action == "guest-revoke")
 			if e == nil {
@@ -504,6 +538,9 @@ func (s *Store) Mutate(ctx context.Context, id string, a Auth, in Mutation) (Sna
 	}
 	out, _, e = s.matchTx(ctx, tx, id, a, true)
 	if e != nil {
+		return out, "", e
+	}
+	if e = syncBotJob(ctx, tx, out); e != nil {
 		return out, "", e
 	}
 	if e = tx.Commit(); e != nil {

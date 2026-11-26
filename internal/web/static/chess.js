@@ -30,6 +30,20 @@
     document.querySelectorAll('[data-confirm]').forEach(form => form.addEventListener('submit', event => { if (!confirm(form.dataset.confirm)) event.preventDefault(); }));
     document.querySelector('[data-error-summary]')?.focus();
 
+    const opponent = document.querySelector('#setup-opponent');
+    if (opponent) {
+      const selectOpponent = () => {
+        const bot = opponent.value === 'bot';
+        document.querySelectorAll('[data-guest-fields]').forEach(panel => { panel.hidden = bot; });
+        document.querySelectorAll('[data-bot-fields]').forEach(panel => { panel.hidden = !bot; });
+        const name = document.querySelector('#setup input[name=name]');
+        name.required = !bot;
+        document.querySelector('#setup select[name=bot_level]').disabled = !bot;
+      };
+      on(opponent, 'change', selectOpponent);
+      selectOpponent();
+    }
+
     const editor = document.querySelector('#editor-board');
     const preview = document.querySelector('#setup-board');
     if (editor || preview) {

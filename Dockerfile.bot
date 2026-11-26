@@ -1,0 +1,23 @@
+FROM golang:1.27-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/stockfish-server ./cmd/stockfish-server
+
+FROM debian:trixie-slim AS engine
+RUN apt-get update && apt-get install -y --no-install-recommends stockfish \
+    && mkdir -p /usr/share/stockfish
+
+FROM gcr.io/distroless/cc-debian13:nonroot
+COPY --from=build /out/stockfish-server /usr/local/bin/stockfish-server
+COPY --from=engine /usr/games/stockfish /usr/games/stockfish
+COPY --from=engine /usr/share/stockfish/ /usr/share/stockfish/
+COPY --from=engine /usr/share/doc/stockfish/copyright /usr/share/licenses/stockfish/copyright
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/licenses/chess/
+COPY licenses/ /usr/share/licenses/chess/licenses/
+USER 10001:10001
+ENV SERVICE_PORT=8080 GOMAXPROCS=1 GOMEMLIMIT=64MiB
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s CMD ["/usr/local/bin/stockfish-server", "healthcheck"]
+ENTRYPOINT ["/usr/local/bin/stockfish-server"]

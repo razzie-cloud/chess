@@ -73,12 +73,36 @@ func run() error {
 		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
 		MaxHeaderBytes: 32 << 10, ErrorLog: logging.ServerLogger(),
 	}
+	var botServer *http.Server
+	botErrors := make(chan error, 1)
+	botDone := make(chan struct{})
+	if cfg.BotURL != "" {
+		botServer = &http.Server{Addr: ":" + cfg.BotPort, Handler: app.BotHandler(storage, cfg.BotToken), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, MaxHeaderBytes: 8192}
+		go func() {
+			if err := botServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				botErrors <- err
+				stop()
+			}
+		}()
+		go func() {
+			defer close(botDone)
+			app.DispatchBots(ctx, storage, cfg.BotURL, cfg.BotWebhookURL, cfg.BotToken)
+		}()
+	} else {
+		close(botDone)
+	}
+
 	shutdownDone := make(chan struct{})
 	go func() {
 		defer close(shutdownDone)
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		if botServer != nil {
+			if err := botServer.Shutdown(shutdown); err != nil {
+				_ = botServer.Close()
+			}
+		}
 		if err := server.Shutdown(shutdown); err != nil {
 			slog.Warn("Graceful shutdown failed", "event", "server.shutdown_failed", "error_kind", logging.Kind(err))
 			_ = server.Close()
@@ -90,6 +114,12 @@ func run() error {
 	// Shutdown closes the listener before draining requests. Keep database and
 	// verifier dependencies alive until all requests finish.
 	<-shutdownDone
+	<-botDone
+	select {
+	case botError := <-botErrors:
+		return logging.Wrap("bot_serve", botError)
+	default:
+	}
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}

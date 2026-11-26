@@ -33,6 +33,7 @@ jobs:
             exit 1
           fi
           printf 'ref=ghcr.io/%s:%s\n' "${GITHUB_REPOSITORY,,}" "$GIT_TAG" >> "$GITHUB_OUTPUT"
+          printf 'bot_ref=ghcr.io/%s-stockfish:%s\n' "${GITHUB_REPOSITORY,,}" "$GIT_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -57,3 +58,18 @@ jobs:
             org.opencontainers.image.version=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and publish Stockfish companion
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.bot
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.bot_ref }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          cache-from: type=gha,scope=stockfish
+          cache-to: type=gha,scope=stockfish,mode=max

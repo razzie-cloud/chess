@@ -5,10 +5,14 @@ source here, coordination in the parent, and Swarm configuration in `infra`.
 The design and phased implementation evidence live in `docs/plans/`.
 
 PostgreSQL is authoritative for matches, grants, guest sessions, puzzle
-definitions and completed progress. Puzzle play is stateless: replay every
+definitions, completed progress and pending bot jobs. Puzzle play is stateless: replay every
 submitted decision from the immutable proof and verify the complete board set;
 never trust client FENs, completion flags or omitted defenses. No Redis, game
-registry, sticky sessions or runtime solver.
+registry, sticky sessions or puzzle runtime solver. Bot matches dispatch durable
+PostgreSQL jobs to the separate bounded `cmd/stockfish-server` worker. Read
+`docs/plans/2026-11-26-stockfish-bot.md` before changing bot jobs, callbacks or
+resource limits; keep callbacks on their private listener and validate revision,
+seat and legality under the match lock. Bot matches must never gain guest grants.
 Use pgx/database/sql, go-rel and append-only Goose migrations. Lock a match before
 its grants/session/receipts. Puzzle completion uses a monotonic owner-scoped bit
 upsert; do not create new puzzle attempts or store partial progress.

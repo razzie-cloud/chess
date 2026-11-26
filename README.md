@@ -79,3 +79,12 @@ archive, puzzle definitions and progress (plus any historical attempt rows).
 There is no match expiry or automatic match cleanup. See
 [release and rollback](docs/reference.md#release).
 Artwork/dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Stockfish opponents
+
+All three new-game forms support guests or five fixed Stockfish difficulties.
+The optional private worker uses one thread with a bounded queue; Chess persists
+bot turns and validates webhook moves transactionally. Build the worker with
+`docker build -f Dockerfile.bot -t razcloud-stockfish:local .`, or use the parent
+repository's `docker-compose.bot.yml` override for a 1.25 CPU / 512 MiB setup.
+See [configuration, API and design](docs/plans/2026-11-26-stockfish-bot.md).

@@ -71,3 +71,12 @@ The Go standard-library notice is `licenses/go-stdlib.txt`. The selected
 malbrecht/chess MIT notice is additionally available at
 `licenses/malbrecht-chess.txt`. Refresh the license inventory when changing
 runtime modules.
+
+## Optional Stockfish worker image
+
+`Dockerfile.bot` installs the unmodified Debian Stockfish package and copies its
+NNUE data and package copyright notice into the worker image. Stockfish is GPL
+licensed; its notice is `/usr/share/licenses/stockfish/copyright` in that image.
+Upstream source and license: <https://github.com/official-stockfish/Stockfish>.
+Matching Debian source packages: <https://sources.debian.org/src/stockfish/>.
+The ordinary Chess image does not include Stockfish.

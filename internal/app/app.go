@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/malbrecht/chess"
+	"github.com/razzie-cloud/chess/internal/bot"
 	"github.com/razzie-cloud/chess/internal/config"
 	"github.com/razzie-cloud/chess/internal/game"
 	"github.com/razzie-cloud/chess/internal/gatewayidentity"
@@ -49,6 +50,8 @@ type Page struct {
 	Match                                                                     *store.Snapshot
 	State                                                                     *State
 	Setup                                                                     store.Setup
+	BotEnabled                                                                bool
+	Difficulties                                                              []bot.Difficulty
 	Archive, Editor, Bootstrap                                                bool
 	Puzzle                                                                    any
 }
@@ -66,6 +69,7 @@ type State struct {
 	ViewURL     string       `json:"viewURL"`
 	Turn        string       `json:"turn"`
 	CheckSquare string       `json:"checkSquare"`
+	BotTurn     bool         `json:"botTurn"`
 }
 
 func New(cfg config.Config, s *store.Store, v *gatewayidentity.Verifier, h *health.Monitor) (http.Handler, error) {
@@ -181,7 +185,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) page(r *http.Request, title string) Page {
 	u, _ := r.Context().Value(key{}).(identity)
-	return Page{Title: title, User: u, Origin: s.cfg.Origin, ShareOrigin: s.cfg.ShareOrigin, Home: s.cfg.LandingOrigin, Account: s.verifier.AccountURL(s.cfg.LandingOrigin), RequestID: uuid.NewString()}
+	return Page{Title: title, User: u, Origin: s.cfg.Origin, ShareOrigin: s.cfg.ShareOrigin, Home: s.cfg.LandingOrigin, Account: s.verifier.AccountURL(s.cfg.LandingOrigin), RequestID: uuid.NewString(), BotEnabled: s.cfg.BotURL != "", Difficulties: bot.Difficulties}
 }
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p Page, status int) {
 	if name == "setup" {
@@ -285,8 +289,18 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, "setup", p, 200)
 }
+func formBotLevel(r *http.Request) int {
+	if r.FormValue("opponent") != "bot" {
+		return 0
+	}
+	level, err := strconv.Atoi(r.FormValue("bot_level"))
+	if err != nil {
+		return -1
+	}
+	return level
+}
 func setupForm(r *http.Request) store.Setup {
-	return store.Setup{Name: r.FormValue("name"), Color: r.FormValue("color"), Mode: r.FormValue("mode"), FEN: r.FormValue("fen"), PGN: r.FormValue("pgn"), Chess960Index: r.FormValue("chess960_index")}
+	return store.Setup{Name: r.FormValue("name"), Color: r.FormValue("color"), Mode: r.FormValue("mode"), FEN: r.FormValue("fen"), PGN: r.FormValue("pgn"), Chess960Index: r.FormValue("chess960_index"), Opponent: r.FormValue("opponent"), BotLevel: formBotLevel(r)}
 }
 
 func (s *Server) refreshChess960(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +352,12 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, "setup", p, 422)
 		return
 	}
+	if p.Setup.Opponent == "bot" && s.cfg.BotURL == "" {
+		p.Error = "Bot play is currently unavailable. Choose a guest opponent."
+		s.render(w, r, "setup", p, 422)
+		return
+	}
+
 	result, e := s.store.Create(r.Context(), p.User.ID, p.RequestID, selectedSetup(r, p.Setup))
 	if e != nil {
 		if errors.Is(e, store.ErrInvalid) {
@@ -461,6 +481,7 @@ func (s *Server) matchData(r *http.Request, m store.Snapshot) Page {
 		p.Opening = st.Opening
 	}
 	if board, err := game.ValidateFEN(m.CurrentFEN); err == nil {
+		st.BotTurn = m.BotLevel > 0 && m.Status == "active" && (board.SideToMove == 0) != (m.CreatorColor == "w")
 		st.Turn = "White"
 		if board.SideToMove == 1 {
 			st.Turn = "Black"
@@ -489,7 +510,7 @@ func (s *Server) matchPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := s.matchData(r, m)
-	if r.URL.Query().Get("created") == "1" {
+	if r.URL.Query().Get("created") == "1" && m.BotLevel == 0 {
 		p.Notice = "Created successfully. Replace the playing link to obtain a new link if you did not save it."
 	}
 	s.render(w, r, "match", p, 200)

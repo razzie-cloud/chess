@@ -12,11 +12,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/razzie-cloud/chess/internal/bot"
 	"github.com/razzie-cloud/chess/internal/brokerdiscovery"
 	"github.com/razzie-cloud/chess/internal/gatewayidentity"
 )
 
 type Config struct {
+	BotURL, BotWebhookURL, BotToken, BotTokenFile, BotPort     string
 	Port, Origin, ShareOrigin, LandingOrigin, AccessGatewayURL string
 	PostgresURI, PostgresURIFrom, PasswordFile                 string
 	BrokerTokenFile, BrokerCAFile, LogLevel                    string
@@ -44,6 +46,11 @@ func Load(args []string, env func(string) string) (Config, error) {
 	str(&c.BrokerTokenFile, "broker-token-file", "BROKER_TOKEN_FILE", "")
 	str(&c.BrokerCAFile, "broker-ca-file", "BROKER_CA_FILE", "")
 	str(&c.LogLevel, "log-level", "LOG_LEVEL", "INFO")
+	str(&c.BotURL, "bot-url", "BOT_URL", "")
+	str(&c.BotWebhookURL, "bot-webhook-url", "BOT_WEBHOOK_URL", "")
+	str(&c.BotToken, "bot-token", "BOT_TOKEN", "")
+	str(&c.BotTokenFile, "bot-token-file", "BOT_TOKEN_FILE", "")
+	str(&c.BotPort, "bot-port", "BOT_PORT", "8082")
 	if err := f.Parse(args); err != nil {
 		return c, errors.New("invalid command-line configuration")
 	}
@@ -79,6 +86,20 @@ func Load(args []string, env func(string) string) (Config, error) {
 	default:
 		return c, errors.New("LOG_LEVEL must be DEBUG, INFO, WARN, or ERROR")
 	}
+	if c.BotURL != "" {
+		if c.BotTokenFile != "" {
+			data, err := os.ReadFile(c.BotTokenFile)
+			if err != nil {
+				return c, errors.New("cannot read BOT_TOKEN_FILE")
+			}
+			c.BotToken = strings.TrimSpace(string(data))
+		}
+		n, err := strconv.Atoi(c.BotPort)
+		if !bot.ValidURL(c.BotURL) || !bot.ValidURL(c.BotWebhookURL) || len(c.BotToken) < 32 || strings.ContainsAny(c.BotToken, "\r\n") || err != nil || n < 1 || n > 65535 || n == p {
+			return c, errors.New("invalid bot URL, webhook, token or private port")
+		}
+	}
+
 	return c, nil
 }
 

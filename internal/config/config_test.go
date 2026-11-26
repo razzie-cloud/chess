@@ -69,3 +69,37 @@ func TestAuthenticatedDiscovery(t *testing.T) {
 		t.Fatalf("discovery: %q %v", got, err)
 	}
 }
+
+func TestBotConfiguration(t *testing.T) {
+	base := validEnv()
+	base["BOT_URL"] = "http://stockfish:8080/jobs"
+	base["BOT_WEBHOOK_URL"] = "http://chess:8082/bot/moves"
+	base["BOT_TOKEN"] = strings.Repeat("x", 32)
+	if _, err := Load(nil, func(k string) string { return base[k] }); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ key, value string }{
+		{"BOT_TOKEN", "short"}, {"BOT_TOKEN", "12345678901234567890123456789012\n"},
+		{"BOT_WEBHOOK_URL", "http://user:password@chess:8082/bot/moves"},
+		{"BOT_URL", "http://stockfish:70000/jobs"}, {"BOT_URL", "http://stockfish/jobs#"},
+		{"BOT_PORT", "08080"}, {"BOT_PORT", "0"}, {"BOT_WEBHOOK_URL", ""},
+	} {
+		env := make(map[string]string)
+		for k, v := range base {
+			env[k] = v
+		}
+		env[tc.key] = tc.value
+		if _, err := Load(nil, func(k string) string { return env[k] }); err == nil {
+			t.Fatalf("accepted %s", tc.key)
+		}
+	}
+	file := filepath.Join(t.TempDir(), "bot-token")
+	if err := os.WriteFile(file, []byte(strings.Repeat("y", 32)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	base["BOT_TOKEN_FILE"] = file
+	c, err := Load(nil, func(k string) string { return base[k] })
+	if err != nil || c.BotToken != strings.Repeat("y", 32) {
+		t.Fatalf("token file: %v", err)
+	}
+}

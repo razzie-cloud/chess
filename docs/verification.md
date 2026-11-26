@@ -491,3 +491,67 @@ The opt-in live Gateway SSO test skipped; live SSO acceptance and a Chess Docker
 build were not repeated for this UI change. Firefox/Safari and physical
 authenticators were not exercised. No production services, operator environment,
 Docker context, remote, image publication or deployment was changed.
+## Stockfish bots — 26 November 2026
+
+The private `cmd/stockfish-server` worker and all three match creators now support
+five immutable bot difficulties. The [design/API/run guide](plans/2026-11-26-stockfish-bot.md)
+records queue bounds, durable retries, callback authorization and deployment setup.
+
+Validation used an isolated PostgreSQL container on loopback port 55439, its own
+test database/random schemas, the actual engine extracted from the worker image,
+and `/usr/bin/brave`. No existing application database was used.
+
+- `gofmt` on changed Go; `go build ./...`; `go vet ./...`.
+- `go test ./...` and `go test -race ./...`, with `TEST_DATABASE_URL`,
+  `STOCKFISH_TEST_PATH` and `CHROMIUM_EXECUTABLE_PATH` set. The race suite passed
+  200 tests in 19 packages. Existing opt-in live-stack acceptance stays separate.
+- Real-engine searches at all five levels, standard/custom positions and
+  Chess960; protocol/canonical-castling checks and cancellation of a hung engine.
+- Queue saturation, duplicate/conflicting IDs, invalid/finished PGN, webhook
+  allowlisting/authentication, callback retries and redirect refusal. Database
+  checks cover both creator colors, revision changes, illegal/duplicate callbacks,
+  one-connection pools, concurrent consumers, resignation/deletion and no guest
+  grants for bots.
+- Production-CSP browser checks of all three setup forms in light/dark at
+  320/390/768/1440 px (24 layouts), including draft retention, custom validation,
+  HTMX navigation and difficulty submission. Real-engine browser play exercised
+  standard and Chess960 bot-first starts and a custom match's automatic reply to
+  a human move. No CSP/browser errors occurred. Desktop/mobile bot screenshots
+  were saved and visually inspected.
+- `docker build --network host -f Dockerfile.bot -t razcloud-stockfish:validation .`
+  succeeded. The distroless worker started and passed its exec readiness probe
+  under 1.25 CPU, 512 MiB, 32 PIDs, read-only filesystem and dropped capabilities.
+  Eight level-five jobs were accepted; the ninth returned `429`. Saturation used
+  about 101–104% CPU (one core) and at most 218,648,576 bytes (~209 MiB) of cgroup
+  peak memory across two image runs. No OOM occurred. This is a local smoke check,
+  not a long-running or worst-case PGN load benchmark.
+- Parent Compose configuration passed with the bot override, and with both the
+  legacy broker-auth and bot overrides. Workflow/override YAML parsed, whitespace
+  checks passed, and `go run ./cmd/puzzleprep verify -input internal/db/seeds/puzzles.json`
+  verified the unchanged collection.
+
+Difficulty names are relative presets, without calibrated Elo ratings. No image
+publication, production Swarm changes, production rollout or live Gateway/passkey
+acceptance was performed. Disposable validation containers were removed afterward.
+
+### Production Swarm wiring follow-up
+
+The production stack now includes the private one-replica Stockfish worker and
+mounts the shared external `chess_bot_token` secret into both services using
+`BOT_TOKEN_FILE`, UID/GID 10001 and mode 0400. The deploy helper creates the token
+only if missing, independently of broker auth mode, and includes worker readiness
+in acceptance. Chess's publication workflow now builds the companion
+`chess-stockfish` image under the same release tag as Chess.
+
+Infra `go build ./...`, `go vet ./...`, `go test ./...` and `go test -race ./...`
+passed (127 tests each suite). New/extended fixtures cover creation, reuse,
+operator-provisioned secrets, mounts in broker token/none modes and conversion of
+Compose's numeric CPU limits/string octal permissions for the Swarm schema.
+Real offline parent `make config` passed against `infra/.env.example` with
+placeholder image tags in both broker modes and a queue-size override. Manifest
+assertions checked limits, private endpoints/networks, secret permissions and
+matching image tags. Publication-reference checks, the existing offline
+image-selection fixtures, shell syntax, YAML parsing and whitespace checks passed.
+No production daemon was contacted, no secrets were created on a real Swarm,
+and no images were published or deployed. The new release must publish both
+companion images before deployment selects it.

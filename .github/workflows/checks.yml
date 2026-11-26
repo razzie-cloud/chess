@@ -26,6 +26,11 @@ jobs:
           browser=$(command -v google-chrome || command -v chromium || true)
           test -n "$browser"
           printf 'CHROMIUM_EXECUTABLE_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+      - name: Install the real engine for bot acceptance
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y stockfish
+          printf 'STOCKFISH_TEST_PATH=/usr/games/stockfish\n' >> "$GITHUB_ENV"
       - run: test -z "$(gofmt -l cmd internal tests tools)"
       - run: go build ./...
       - run: go vet ./...
@@ -41,6 +46,7 @@ jobs:
           cmp /tmp/chess-eco.before.tsv internal/opening/eco.tsv
       - run: docker build -t chess:test .
       - run: bash tools/check-image.sh chess:test
+      - run: docker build -f Dockerfile.bot -t stockfish:test .
       - uses: actions/upload-artifact@v4
         if: always()
         with:
