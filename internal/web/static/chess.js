@@ -4,7 +4,7 @@
   const initialize = () => {
     teardown();
     const lifecycle = new AbortController();
-    const cleaners = [];
+    const cleaners = [() => fireworks.stop()];
     teardown = () => { lifecycle.abort(); cleaners.splice(0).forEach(clean => clean()); };
     const on = (target, type, listener, options = {}) => target.addEventListener(type, listener, {...options, signal: lifecycle.signal});
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -183,6 +183,7 @@
       const changed = next.fen !== state.fen;
       const ended = next.status === 'completed' && state.status !== 'completed';
       state = next;
+      if (ended && ['1-0', '0-1'].includes(state.result)) fireworks.play();
       if (changed) history = false;
       if (!history && board && (changed || force)) board.position(state.fen, animate && !reduced);
       if (animate && (changed || ended)) {

@@ -75,6 +75,11 @@ func TestBrowserPuzzleFullStateRejectedMovesLocksAndNextUndone(t *testing.T) {
 
 	for i, branch := range []string{"root-1", "root-2"} {
 		b.Run(`const form=el('#branch-` + branch + ` form');form.elements.uci.value=` + browser.Quote(d.Root.Replies[i].Next.Move) + `;form.requestSubmit();await wait(()=>el('#branch-` + branch + ` .branch-state').dataset.done==='true');assert(el('#board-root-2')===sibling,'sibling remounted');assert(el('#puzzle-promotion')===keptDialog,'dialog remounted');assert(!document.querySelector('#branch-` + branch + ` form'),'completed board can move');await frame();assert(document.querySelector('#branch-` + branch + ` .in-check'),'mated king is not red');assert(moveBodies.at(-1).state.boards.length===2,'all boards not submitted');`)
+		if i == 0 {
+			b.Run(`assert(!document.querySelector('.fireworks'),'partial puzzle celebrated');`)
+		} else {
+			b.Run(`assert(document.querySelector('.fireworks'),'all-lines completion did not celebrate');`)
+		}
 	}
 	for _, theme := range []string{"light", "dark"} {
 		b.Call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}})

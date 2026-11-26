@@ -8,6 +8,28 @@ Swarm, broker policies, helper fixtures, tag selection and Caddy validation.
 [Live acceptance](live-acceptance.md) separately records real Gateway sessions,
 virtual passkeys, anonymous guest play, round-robin replicas, restarts and sign-out.
 
+## Win fireworks — 27 November 2026
+
+Decisive match results and fully completed puzzles play a brief local canvas
+fireworks effect after server confirmation. Draws, partial puzzle completion and
+reopening finished matches do not trigger it. The effect respects reduced motion,
+passes clicks through and stops on navigation, hidden tabs or viewport changes.
+Keep `internal/web/static/fireworks.js` identical to Sudoku's independently
+embedded copy.
+
+Production-CSP browser checks cover both winning colors, remote completion,
+draws, all-lines puzzle completion, repeat updates, cleanup and reduced-motion
+changes. Both themes passed at 320/390/768/1440 pixels without overflow or focus
+loss. Viewport captures avoid resizing away the active effect; see
+[light desktop](screenshots/fireworks-light-1440.png) and
+[dark mobile](screenshots/fireworks-dark-390.png).
+
+Build, vet, full tests and the full race suite passed with a disposable loopback
+PostgreSQL container and headless Brave (203 tests/subtests in each complete
+suite). The ordinary run initially hit the existing creator-refresh focus check;
+its targeted retry and the subsequent full run passed. Live Gateway and real
+Stockfish checks were not enabled. No publication or deployment ran.
+
 ## Viewer sidebar separation — 26 November 2026
 
 The optional recently-active-tabs count now uses the shared `sidebar-section`

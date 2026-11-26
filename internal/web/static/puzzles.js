@@ -4,6 +4,7 @@
     const lifecycle = new AbortController(), signal = lifecycle.signal, boards = new Map();
     let request, preview;
     const cleanup = () => {
+      fireworks.stop();
       lifecycle.abort(); request?.abort(); preview?.destroy();
       boards.forEach(({board, observer}) => { observer.disconnect(); board.destroy(); });
     };
@@ -95,6 +96,7 @@
     const apply = html => {
       const next = new DOMParser().parseFromString(html, 'text/html').querySelector('#puzzle-state');
       if (!next) throw new Error('Puzzle state unavailable');
+      const completed = next.dataset.done === 'true' && state.dataset.done !== 'true';
       if (promotion.open) promotion.close();
       const overview = state.querySelector('#puzzle-overview'), incomingOverview = next.querySelector('#puzzle-overview');
       overview.remove();
@@ -121,6 +123,7 @@
       state.querySelector('#puzzle-navigation').replaceWith(incomingOverview.querySelector('#puzzle-navigation'));
       htmx.process(state);
       document.dispatchEvent(new CustomEvent('chess:navigation', {detail: state}));
+      if (completed) fireworks.play();
     };
     const expire = () => {
       stopped = true; if (promotion.open) promotion.close();
