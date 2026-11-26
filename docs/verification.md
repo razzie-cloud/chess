@@ -333,3 +333,49 @@ The pre-existing Air Compose Chess container remained healthy.
 
 Firefox/Safari and physical authenticators were not exercised. No production
 database, Docker context, deployment, image publication or remote was changed.
+
+## 2026-11-26 — Shared theme and play sidebars
+
+Chess now uses the platform's light/dark palette and gold selected navigation.
+Match controls have spaced sections and dividers. Puzzle headings and playing
+color remain above flat boards; status, navigation and move controls use the same
+sidebar sections. Forks become stacked board/sidebar rows, retaining mounted
+boards and completed lines. Shared puzzle feedback and navigation transfer to
+the first surviving branch without duplication.
+
+Gold knight cues explicitly name White or Black to move, using the canonical
+position. Waiting and completed matches retain their own status, and completed
+puzzle lines show checkmate instead of a move prompt. New game's fourth choice,
+**Play a random puzzle**, selects from all available puzzle slots. The protected
+redirect preserves the shell and selected puzzle URL; an empty collection list
+returns to Puzzles. The in-game menu now contains only match actions.
+
+Validation used Go 1.27.4, `GOCACHE=/tmp/razcloud-chess-ui-cache`, a disposable
+loopback PostgreSQL container with isolated test schemas, and
+`CHROMIUM_EXECUTABLE_PATH=/opt/brave-bin/brave`:
+
+```sh
+gofmt -l cmd internal tests
+go build ./...
+go vet ./...
+go run ./cmd/puzzleprep verify -input internal/db/seeds/puzzles.json
+go test -json ./... -count=1
+go test -race -json ./... -count=1
+git diff --check
+```
+
+Formatting, build, vet and seed verification passed. Regular and race suites each
+passed 170 tests/subtests across 13 tested packages, including all seven browser
+tests under production CSP; no race was reported. Browser checks cover both
+themes at 320/390/768/1440 pixels, owner/guest/viewer layouts, persistent boards,
+fork/completion/retry behavior, menu placement, control alignment and random-puzzle
+navigation. Turn-status tests cover White, Black, own/opponent turns, viewers,
+waiting/completed matches and canonical puzzle responses. Screenshots were
+refreshed and representative desktop/mobile match, puzzle, completion and menu
+views were inspected visually. The shared account-header stylesheet remains
+identical to Files'.
+
+The opt-in live Gateway SSO test skipped; live SSO acceptance and a Chess Docker
+build were not repeated for this UI change. Firefox/Safari and physical
+authenticators were not exercised. No production services, operator environment,
+Docker context, remote, image publication or deployment was changed.
