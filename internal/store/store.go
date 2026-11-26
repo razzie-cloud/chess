@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -59,7 +60,11 @@ type Snapshot struct {
 	Viewers                int
 }
 type Auth struct{ Owner, Session, View string }
-type Setup struct{ Name, CreatorName, Color, Mode, FEN, PGN string }
+type Setup struct {
+	Name, CreatorName, Color, Mode, FEN, PGN string
+	// Omit absent selections to preserve creation receipts from older clients.
+	Chess960Index string `json:",omitempty"`
+}
 type Created struct {
 	ID, PlayingToken, ViewToken string
 	Replay, Deleted             bool
@@ -141,9 +146,20 @@ func (s *Store) Create(ctx context.Context, owner, request string, setup Setup) 
 		fen = game.StartFEN
 	}
 	if setup.Mode == "chess960" && setup.PGN == "" {
-		fen, e = game.Random960()
-		if e != nil {
-			return out, e
+		if setup.Chess960Index == "" {
+			fen, e = game.Random960()
+			if e != nil {
+				return out, e
+			}
+		} else {
+			index, err := strconv.Atoi(setup.Chess960Index)
+			if err != nil {
+				return out, ErrInvalid
+			}
+			fen, e = game.Chess960(index)
+			if e != nil {
+				return out, ErrInvalid
+			}
 		}
 	}
 	var g *game.Game

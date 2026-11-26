@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'">
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"historyCacheSize":0,"allowScriptTags":false}'>
+<title>Custom game · Chess · Razzie Cloud</title>
+<link rel="icon" href="../../../internal/web/static/razzie-cloud-logo-favicon.png">
+<link rel="stylesheet" href="../../../internal/web/static/pico.min.css"><link rel="stylesheet" href="../../../internal/web/static/chess.css">
+<link rel="stylesheet" href="../../../internal/web/static/account-header.css"><link rel="stylesheet" href="../../../internal/web/static/chessboard-1.0.0.min.css">
+<link rel="stylesheet" href="../mockup.css"><link rel="stylesheet" href="../dark.css">
+<script defer src="../../../internal/web/static/jquery-3.6.3.min.js"></script><script defer src="../../../internal/web/static/chessboard-1.0.0.min.js"></script>
+<script defer src="../../../internal/web/static/htmx.min.js"></script><script defer src="../custom-game.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="preview-bar"><strong>DESIGN PREVIEW</strong><span>Sample data · no games are created</span><a href="../custom-game.html">Light mode</a></div>
+<header class="topbar">
+<div class="brand-group"><a class="brand" href="custom-game.html"><img class="brand-mark" src="../../../internal/web/static/razzie-cloud-logo.png" alt="" width="46" height="46"><strong>Razzie Cloud</strong></a><a class="service-name" href="custom-game.html">Chess</a></div>
+<div class="topbar-right"><div class="identity" aria-label="Signed-in account"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><div class="identity-copy"><a class="account-link" href="https://auth.example.invalid/" title="Manage your account"><strong title="razzie">razzie</strong></a></div></div></div>
+</header>
+<nav class="app-nav" aria-label="Chess"><ul><li><button class="nav-link" data-nav="/create" aria-current="page" popovertarget="new-game-menu">New game</button></li><li><span>Sessions</span></li><li><span>Archive</span></li><li><span>Puzzles</span></li></ul><div id="new-game-menu" class="game-menu" popover><nav aria-label="New game"><a href="custom-game.html">Custom game</a><small>Other game modes are outside this preview.</small></nav></div></nav>
+<main id="main" class="container" tabindex="-1">
+<div class="page-heading"><h1>Create custom game</h1><p>Set the position, then invite your opponent.</p></div>
+<form id="custom-game" action="../fragments/created.html" hx-get="../fragments/created.html" hx-target="#create-result" hx-params="none">
+<div class="setup-layout">
+<section class="position-workspace" aria-labelledby="position-heading">
+<div class="section-heading"><h2 id="position-heading">Starting position</h2><button type="button" class="text-action" id="flip">Flip board</button></div>
+<div id="position-board" data-pieces="../../../internal/web/static/pieces/{piece}.png" aria-label="Position preview. Use the FEN field as a keyboard alternative to dragging pieces."></div>
+<div class="board-toolbar"><p>Drag pieces onto the board; drag off to remove.</p><div class="button-row"><button type="button" class="secondary outline" id="reset">Default position</button><button type="button" class="secondary outline" id="clear">Clear board</button></div></div>
+</section>
+<aside class="setup-sidebar">
+<section class="position-panel" aria-labelledby="method-heading">
+<h2 id="method-heading">Position source</h2>
+<fieldset class="source-switch"><legend class="sr-only">Choose position source</legend><label><input type="radio" name="preview-source" value="board" checked>Board editor</label><label><input type="radio" name="preview-source" value="fen">FEN</label><label><input type="radio" name="preview-source" value="pgn">PGN</label></fieldset>
+<div id="board-options" class="source-panel">
+<label for="side">Side to move</label><select id="side"><option value="w">White</option><option value="b">Black</option></select>
+<details id="rules"><summary>Position rules <small>Castling, en passant &amp; counters</small></summary>
+<label for="castle">Castling rights</label><input id="castle" value="KQkq" maxlength="8">
+<div class="field-pair"><label>En passant<input id="ep" value="-" maxlength="2"></label><label>Halfmoves<input id="half" type="number" min="0" max="99999" value="0"></label></div>
+<label>Fullmove number<input id="full" type="number" min="1" max="99999" value="1"></label>
+<small>Chess960 accepts rook-file rights, for example HAha.</small></details>
+</div>
+<div id="fen-options" class="source-panel" hidden><label for="fen">Complete FEN</label><textarea id="fen" rows="4" spellcheck="false" maxlength="200"></textarea><button type="button" class="secondary outline" id="load-fen">Preview position</button><p class="hint">FEN starts a new repetition history. This preview checks the format only, not position legality.</p></div>
+<div id="pgn-options" class="source-panel" hidden><label for="pgn">PGN</label><textarea id="pgn" rows="6" maxlength="262144" spellcheck="false" placeholder="Paste one game, including a final result marker"></textarea><p class="hint">The live game validates and replays the import. This mockup keeps the board unchanged.</p></div>
+<p id="position-feedback" class="hint" role="status"></p>
+</section>
+<section class="match-panel" aria-labelledby="match-heading"><h2 id="match-heading">Match details</h2>
+<label for="opponent">Opponent’s display name</label><input id="opponent" required maxlength="80" autocomplete="off" placeholder="e.g. Alex">
+<fieldset class="color-choice"><legend>Your color</legend><label><input type="radio" name="preview-color" value="w" checked> White</label><label><input type="radio" name="preview-color" value="b"> Black</label></fieldset>
+<p class="hint">Only you manage this match. Your opponent’s private link lets them play their color.</p>
+<button type="submit" class="create-button">Create match</button><div id="create-result" aria-live="polite"></div>
+</section>
+</aside>
+</div>
+</form>
+</main>
+</body></html>

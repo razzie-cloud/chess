@@ -8,6 +8,118 @@ Swarm, broker policies, helper fixtures, tag selection and Caddy validation.
 [Live acceptance](live-acceptance.md) separately records real Gateway sessions,
 virtual passkeys, anonymous guest play, round-robin replicas, restarts and sign-out.
 
+## Viewer sidebar separation — 26 November 2026
+
+The optional recently-active-tabs count now uses the shared `sidebar-section`
+style, giving it the same divider and padding as the opening and move-history
+sections. The single template change applies to full pages and HTMX state
+fragments; hiding the count removes its separator as well.
+
+A temporary browser acceptance fixture rendered the production page in both
+themes at 320/390/768/1440 pixels. It checked the visible border and text padding,
+toggle-off layout, overflow and a real move response replacing the state while
+preserving the count's visibility, separation and mounted board. Four screenshots
+were saved and visually inspected; see
+[dark desktop](screenshots/viewers-dark-1440.png) and
+[light mobile](screenshots/viewers-light-390.png). No JavaScript or CSP errors
+occurred. The temporary fixture was removed from the checkout.
+
+Build, vet, full tests and the full race suite passed with a disposable loopback
+PostgreSQL container and headless Brave. Both complete suites passed 187
+tests/subtests; the opt-in live Gateway test skipped. Parent/component whitespace
+checks passed. Unrelated generated screenshots were restored and the temporary
+database was removed. No live SSO acceptance or deployment ran.
+
+## Chess960 refresh — 26 November 2026
+
+The Fischer random creator opens with a random valid starting position. A
+Refresh button at the top right uses the exact Gateway refresh SVG (with an
+icon-only narrow-screen presentation). Its signed-in GET endpoint returns only
+position metadata and a hidden Scharnagl index. HTMX swaps that fragment and
+updates the existing board; the header, form, opponent name, color, flipped view,
+request ID, focus and URL/history remain in place. Refresh excludes the current
+position. Creation uses the selected index, validated by the existing Chess960
+generator, instead of selecting another layout.
+
+The refresh and Create buttons are disabled while a request is pending. Failed
+requests keep the current position and show a retry message; removing the page
+aborts pending refresh work. Older clients can still omit the index for random
+creation. The optional index is omitted from receipt JSON when absent so older
+creation digests and retries remain valid. No database migration was required.
+
+Verification used the isolated Go cache, headless Brave/Chromium and a new
+loopback-only disposable PostgreSQL container:
+
+- `gofmt` on changed Go files; `go build ./...` and `go vet ./...` passed.
+- The complete regular and race suites passed 187 tests/subtests each; the
+  opt-in live Gateway acceptance test skipped. No race was reported.
+- HTTP coverage checks valid initial/refresh positions, twelve successive
+  different positions, no-store fragment responses and signed-in/public-host
+  boundaries. Store checks cover exact selected starts, rejected malformed or
+  out-of-range indices, repeat receipts, changed-selection rejection, legacy
+  random creation and unchanged legacy receipt digests.
+- Browser coverage includes both themes at 320/390/768/1440 pixels, refresh
+  after HTMX navigation, form/node retention, color/flipped orientation,
+  keyboard focus, temporary disabled controls, unchanged URL/history and GET
+  queries containing only the current position index. An intentionally blocked
+  request retained the position and a retry succeeded. Real match creation
+  matched the selected layout. Existing custom/normal creator and navigation
+  regressions passed. No unexpected JavaScript or CSP errors occurred.
+- The four Chess960 desktop/mobile screenshots were refreshed and visually
+  reviewed; see [light desktop](screenshots/setup-chess960-light-1440.png) and
+  [dark mobile](screenshots/setup-chess960-dark-390.png). Shared account-header
+  equality, exact refresh-icon equality and parent/component whitespace checks
+  passed. Unrelated generated screenshots were restored.
+
+The temporary PostgreSQL container was removed. No live SSO acceptance, push,
+image publication or deployment ran.
+
+## Match creators — 26 November 2026
+
+The custom-game creator now follows the reviewed mockup: a board column beside
+position source and match details, with Board editor / FEN / PGN choices and
+collapsed castling, en-passant and move-counter controls. Normal and Fischer
+random creators use the same frame with read-only board previews, color choices
+and links to the other creators. Chess960 shows a labeled example; its actual
+random position is still chosen by the store when the match is created.
+
+Source selection is applied server-side. Inactive PGN drafts cannot override
+board/FEN input, and selecting an empty PGN returns an input error rather than
+falling back to FEN. Validation and creation errors retain the selected source,
+FEN, PGN, opponent name and color. FEN preview preserves malformed text for
+correction instead of rewriting it through numeric controls. Reset/Clear also
+reset position rules; the board follows the chosen player color and can be
+flipped independently. Dragging and spare-piece tools are limited to the board
+source. Existing routes, ownership, CSP and signed identity checks are retained.
+
+Commands ran inside `chess/` with `GOCACHE=/tmp/razcloud-chess-ui-cache`, a new
+`postgres:18-alpine` container on a random loopback port, random per-test schemas,
+and `CHROMIUM_EXECUTABLE_PATH=/usr/bin/brave`:
+
+- `gofmt` on the changed Go files, `go build ./...`, `go vet ./...`.
+- `go test ./... -count=1` and `go test -race ./... -count=1`: 184 test/subtest
+  passes in each, with the opt-in live Gateway test skipped. No race reported.
+- Final focused regular and race checks of `TestBrowserMatchCreators`, the
+  `TestSetup*` cases and `TestCreateEmptySelectedPGNDoesNotFallBackToFEN`: all
+  ten checks passed after the final FEN preview refinement.
+- All three creators in light/dark at 320/390/768/1440 pixels (24 layouts):
+  heading count, loaded assets, overflow against document client width, desktop
+  column alignment, color/orientation, flip, source panels, keyboard selection,
+  collapsed rules, reset/clear, validation/replay, inactive drafts, input errors
+  and real creation of all three game types with playing links. Existing browser
+  regressions cover stable HTMX shell navigation and the unsaved-draft guard.
+  No unexpected JavaScript or CSP errors occurred.
+- Twelve new production screenshots were saved; representative desktop/mobile
+  views in both themes were visually inspected. See
+  [normal desktop](screenshots/setup-standard-light-1440.png),
+  [Chess960 mobile](screenshots/setup-chess960-dark-390.png), and
+  [custom desktop](screenshots/setup-custom-dark-1440.png).
+- Shared account-header equality and parent/component Git whitespace checks.
+
+The temporary database was removed. Existing staged mockup work was preserved;
+unrelated screenshots regenerated by the full suite were restored. No live
+Gateway/provider acceptance, image publication, push or deployment ran.
+
 ## Stateless puzzle play — 26 November 2026
 
 The current puzzle flow supersedes the attempt/session behavior recorded in the

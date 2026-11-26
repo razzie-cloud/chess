@@ -1,0 +1,37 @@
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --pico-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --pico-font-size: 100%; --pico-line-height: 1.55;
+  --pico-background-color: #101722; --pico-color: #dfe7f3;
+  --pico-h1-color: #f0f4fa; --pico-h2-color: #e7edf7; --pico-h3-color: #e7edf7;
+  --pico-muted-color: #a0afc4; --pico-muted-border-color: #2b384c;
+  --pico-primary: #ffcb67; --pico-primary-hover: #ffda94;
+  --pico-primary-background: #ffc34d; --pico-primary-border: #ffc34d;
+  --pico-primary-hover-background: #ffd17b; --pico-primary-hover-border: #ffd17b;
+  --pico-primary-focus: #ffc34d40; --pico-primary-inverse: #17243e;
+  --pico-secondary: #b4c3d9; --pico-secondary-background: #35445b;
+  --pico-secondary-border: #63748e; --pico-secondary-hover: #e1e9f6;
+  --pico-secondary-hover-background: #40526d; --pico-secondary-hover-border: #94a6c0;
+  --pico-secondary-focus: #b4c3d933; --pico-secondary-inverse: #f0f4fa;
+  --pico-form-element-background-color: #121c2a;
+  --pico-form-element-border-color: #42516a;
+  --pico-form-element-color: #e3ebf7;
+  --pico-form-element-placeholder-color: #8c9db5;
+  --pico-form-element-active-background-color: #172233;
+  --pico-form-element-active-border-color: #ffcb67;
+  --pico-form-element-focus-color: #ffc34d30;
+  --pico-form-element-selected-background-color: #ffc34d;
+  --pico-border-radius: .5rem; --pico-card-background-color: #182231;
+  --pico-card-border-color: #2b384c; --pico-card-sectioning-background-color: #1b2739;
+  --pico-card-box-shadow: 0 2px 4px #00000014;
+  --pico-block-spacing-vertical: 1.35rem;
+  --pico-code-background-color: #233147; --pico-code-color: #bacbe3;
+  --pico-dropdown-background-color: #1b2739; --pico-dropdown-border-color: #42516a;
+  --pico-dropdown-color: #dfe7f3; --pico-dropdown-hover-background-color: #29384f;
+  --pico-accordion-active-summary-color: #ffcb67;
+  --pico-accordion-close-summary-color: #b4c3d9;
+  --pico-accordion-open-summary-color: #dfe7f3;
+  --pico-text-selection-color: #ffc34d35;
+  --chess-nav-active-color: #ffd27d; --chess-nav-active-background: #3a3226;
+  --chess-header-background: #141d2a;
+}

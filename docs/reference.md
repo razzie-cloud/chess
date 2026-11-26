@@ -43,6 +43,18 @@ Puzzles overview. Puzzle collections use plain sections with horizontal dividers
 number previews work on hover or keyboard focus. Match moves and access-link
 management live beside the board, with Game menu beside the match title.
 
+All three creators place a board beside position context and match details on
+wide screens, stacking on smaller screens. Normal and Fischer random creators
+show read-only board previews, color choices and links to other game types.
+Chess960 opens with a random starting position. The top-right Refresh control
+uses HTMX to generate a different layout while keeping the board, form, selected
+color and flipped view in place. Creation uses the displayed position. A failed
+refresh keeps the current selection and allows retry. Custom setup offers Board
+editor / FEN / PGN sources,
+collapsed position rules, flip/reset/clear controls and server-side import
+validation. Only the selected source is used, while inactive drafts, name and
+color survive validation errors. An empty selected PGN cannot fall back to FEN.
+
 Public match titles show the host and guest names. The host name comes from
 verified Gateway identity at creation; older matches acquire it on their owner's
 next match visit. Until then, their public title uses “Host” as the fallback.

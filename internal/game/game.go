@@ -331,9 +331,17 @@ func Chess960(index int) (string, error) {
 }
 
 func Random960() (string, error) {
-	n, err := rand.Int(rand.Reader, big.NewInt(960))
+	index, err := Random960Index()
 	if err != nil {
 		return "", err
 	}
-	return Chess960(int(n.Int64()))
+	return Chess960(index)
+}
+
+func Random960Index() (int, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(960))
+	if err != nil {
+		return 0, err
+	}
+	return int(n.Int64()), nil
 }

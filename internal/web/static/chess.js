@@ -31,28 +31,77 @@
     document.querySelector('[data-error-summary]')?.focus();
 
     const editor = document.querySelector('#editor-board');
-    if (editor) {
-      const fen = document.querySelector('#edit-fen');
-      const fields = ['side', 'castle', 'ep', 'half', 'full'].map(name => document.querySelector('#edit-' + name));
-      const sync = () => {
-        fen.value = [board.fen(), ...fields.map(input => input.value || '-')].join(' ');
-        document.querySelector('#mode').value = 'custom';
-        dirty = true;
-      };
-      const board = Chessboard(editor, {position: fen.value, draggable: true, dropOffBoard: 'trash', sparePieces: true, pieceTheme: '/static/pieces/{piece}.png', onChange: sync});
-      const load = () => {
+    const preview = document.querySelector('#setup-board');
+    if (editor || preview) {
+      const color = () => document.querySelector('#setup input[name=color]:checked')?.value === 'b' ? 'black' : 'white';
+      let board;
+      if (editor) {
+        const fen = document.querySelector('#edit-fen');
+        const fields = ['side', 'castle', 'ep', 'half', 'full'].map(name => document.querySelector('#edit-' + name));
+        let loading = false;
+        const sync = () => {
+          if (!board || loading) return;
+          fen.value = [board.fen(), ...fields.map(input => input.value || '-')].join(' ');
+          dirty = true;
+        };
         const parts = fen.value.trim().split(/\s+/);
-        if (parts.length === 6) {
+        board = Chessboard(editor, {
+          position: Chessboard.fenToObj(parts[0]) || 'start', orientation: color(),
+          draggable: true, dropOffBoard: 'trash', sparePieces: true,
+          pieceTheme: '/static/pieces/{piece}.png', onChange: sync,
+          onDragStart: () => document.querySelector('#setup input[name=source]:checked').value === 'board'
+        });
+        const load = () => {
+          const parts = fen.value.trim().split(/\s+/);
+          if (parts.length !== 6 || !Chessboard.fenToObj(parts[0])) return;
           fields.forEach((field, i) => { field.value = parts[i + 1]; });
+          // Previewing must not rewrite a malformed FEN draft through sanitized controls.
+          loading = true;
           board.position(parts[0], false);
-        }
-      };
-      load();
-      fields.forEach(input => input.addEventListener('change', sync));
-      fen.addEventListener('change', load);
-      document.querySelectorAll('[data-editor]').forEach(button => button.addEventListener('click', () => { if (button.dataset.editor === 'start') board.start(false); else board.clear(false); sync(); }));
+          loading = false;
+        };
+        load();
+        const selectSource = () => {
+          const source = document.querySelector('#setup input[name=source]:checked').value;
+          fields.forEach(field => { field.disabled = source !== 'board'; });
+          document.querySelector('#edit-pgn').required = source === 'pgn';
+        };
+        document.querySelectorAll('#setup input[name=source]').forEach(input => on(input, 'change', selectSource));
+        selectSource();
+        fields.forEach(input => on(input, 'change', sync));
+        on(fen, 'change', load);
+        document.querySelectorAll('[data-editor]').forEach(button => on(button, 'click', () => {
+          const start = button.dataset.editor === 'start';
+          fields.forEach((field, i) => { field.value = ['w', start ? 'KQkq' : '-', '-', '0', '1'][i]; });
+          if (start) board.start(false); else board.clear(false);
+          sync();
+        }));
+      } else {
+        board = Chessboard(preview, {position: preview.dataset.fen, orientation: color(), pieceTheme: '/static/pieces/{piece}.png'});
+      }
+      const refresh960 = document.querySelector('#refresh-chess960');
+      if (preview && refresh960) {
+        cleaners.push(() => htmx.trigger(refresh960, 'htmx:abort'));
+        const feedback = document.querySelector('#chess960-feedback');
+        on(document, 'htmx:afterSwap', event => {
+          if (event.detail.target?.id !== 'chess960-position') return;
+          const position = document.querySelector('#chess960-position');
+          preview.dataset.fen = position.dataset.fen;
+          board.position(position.dataset.fen, false);
+          dirty = true;
+          feedback.textContent = 'New starting position ready.';
+        });
+        const refreshFailed = event => {
+          if (event.detail.elt?.id === 'refresh-chess960') feedback.textContent = 'Unable to refresh. Your current position is kept; try again.';
+        };
+        on(document, 'htmx:responseError', refreshFailed);
+        on(document, 'htmx:sendError', refreshFailed);
+        on(document, 'htmx:timeout', refreshFailed);
+      }
+      on(document.querySelector('[data-setup-flip]'), 'click', () => board.flip());
+      document.querySelectorAll('#setup input[name=color]').forEach(input => on(input, 'change', () => board.orientation(color())));
       const observer = new ResizeObserver(() => board.resize());
-      observer.observe(editor);
+      observer.observe(editor || preview);
       cleaners.push(() => { observer.disconnect(); board.destroy(); });
     }
 

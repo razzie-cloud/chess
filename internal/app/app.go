@@ -42,7 +42,7 @@ type identity struct {
 }
 type Page struct {
 	Title, Error, Notice, PlayingURL, ViewURL, Base, Opening, RequestID, Next string
-	Search, FilterStatus                                                      string
+	Search, FilterStatus, SetupSource, PreviewFEN                             string
 	Origin, ShareOrigin, Home, Account                                        string
 	User                                                                      identity
 	Matches                                                                   []store.Match
@@ -93,6 +93,7 @@ func (s *Server) routes() {
 	p.HandleFunc("GET /matches", s.list)
 	p.HandleFunc("GET /matches/archive", s.list)
 	p.HandleFunc("GET /matches/new", s.setup)
+	p.HandleFunc("GET /matches/new/chess960", s.refreshChess960)
 	p.HandleFunc("POST /matches", s.create)
 	p.HandleFunc("GET /create", s.editor)
 	p.HandleFunc("POST /create/validate", s.validate)
@@ -183,6 +184,31 @@ func (s *Server) page(r *http.Request, title string) Page {
 	return Page{Title: title, User: u, Origin: s.cfg.Origin, ShareOrigin: s.cfg.ShareOrigin, Home: s.cfg.LandingOrigin, Account: s.verifier.AccountURL(s.cfg.LandingOrigin), RequestID: uuid.NewString()}
 }
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p Page, status int) {
+	if name == "setup" {
+		p.Editor = p.Setup.Mode == "custom"
+		p.SetupSource = setupSource(r, p.Setup)
+		p.PreviewFEN = game.StartFEN
+		if p.Setup.Mode == "chess960" {
+			p.Title = "Create Fischer random game"
+			if p.Setup.Chess960Index == "" {
+				index, err := game.Random960Index()
+				if err != nil {
+					s.fail(w, r, err)
+					return
+				}
+				p.Setup.Chess960Index = strconv.Itoa(index)
+			}
+			if index, err := strconv.Atoi(p.Setup.Chess960Index); err == nil {
+				if fen, err := game.Chess960(index); err == nil {
+					p.PreviewFEN = fen
+				}
+			}
+		} else if p.Editor {
+			p.Title = "Create custom game"
+		} else {
+			p.Title = "Create normal game"
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Add("Vary", "HX-Request")
 	var b bytes.Buffer
@@ -260,14 +286,59 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "setup", p, 200)
 }
 func setupForm(r *http.Request) store.Setup {
-	return store.Setup{Name: r.FormValue("name"), Color: r.FormValue("color"), Mode: r.FormValue("mode"), FEN: r.FormValue("fen"), PGN: r.FormValue("pgn")}
+	return store.Setup{Name: r.FormValue("name"), Color: r.FormValue("color"), Mode: r.FormValue("mode"), FEN: r.FormValue("fen"), PGN: r.FormValue("pgn"), Chess960Index: r.FormValue("chess960_index")}
+}
+
+func (s *Server) refreshChess960(w http.ResponseWriter, r *http.Request) {
+	previous, err := strconv.Atoi(r.URL.Query().Get("chess960_index"))
+	if err != nil {
+		previous = -1
+	}
+	for {
+		index, err := game.Random960Index()
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if index == previous {
+			continue
+		}
+		p := s.page(r, "Fischer random position")
+		p.Setup.Chess960Index = strconv.Itoa(index)
+		p.PreviewFEN, _ = game.Chess960(index)
+		s.render(w, r, "chess960-position", p, 200)
+		return
+	}
+}
+
+// Older clients select PGN by its presence; the source choice keeps inactive drafts out of imports.
+func setupSource(r *http.Request, setup store.Setup) string {
+	switch source := r.FormValue("source"); source {
+	case "board", "fen", "pgn":
+		return source
+	}
+	if setup.PGN != "" {
+		return "pgn"
+	}
+	return "board"
+}
+func selectedSetup(r *http.Request, setup store.Setup) store.Setup {
+	if setupSource(r, setup) != "pgn" {
+		setup.PGN = ""
+	}
+	return setup
 }
 func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "New match")
 	p.Setup = setupForm(r)
 	p.Setup.CreatorName = p.User.Name
 	p.RequestID = r.FormValue("request_id")
-	result, e := s.store.Create(r.Context(), p.User.ID, p.RequestID, p.Setup)
+	if setupSource(r, p.Setup) == "pgn" && strings.TrimSpace(p.Setup.PGN) == "" {
+		p.Error = "Paste one PGN game, including a final result marker."
+		s.render(w, r, "setup", p, 422)
+		return
+	}
+	result, e := s.store.Create(r.Context(), p.User.ID, p.RequestID, selectedSetup(r, p.Setup))
 	if e != nil {
 		if errors.Is(e, store.ErrInvalid) {
 			p.Error = e.Error()
@@ -297,7 +368,6 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) editor(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "Create custom game")
-	p.Editor = true
 	p.Setup = store.Setup{Color: "w", Mode: "custom", FEN: game.StartFEN}
 	if fen := r.URL.Query().Get("fen"); fen != "" {
 		if b, e := game.ValidateFEN(fen); e == nil {
@@ -308,12 +378,11 @@ func (s *Server) editor(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "Create custom game")
-	p.Editor = true
 	p.Setup = setupForm(r)
 	p.Setup.Mode = "custom"
 	var g *game.Game
 	var e error
-	if p.Setup.PGN != "" {
+	if setupSource(r, p.Setup) == "pgn" {
 		g, e = game.ImportPGN(p.Setup.PGN)
 	} else {
 		g, e = game.New(p.Setup.FEN, false)
