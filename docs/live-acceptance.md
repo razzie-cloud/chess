@@ -1,5 +1,15 @@
 # Live Gateway, guest play and replica acceptance
 
+The 26 November 2026 rerun passed after the stateless-puzzle and navigation
+changes, using `CHROMIUM_EXECUTABLE_PATH=/opt/brave-bin/brave` and
+`GOCACHE=/tmp/razcloud-chess-ui-cache`. The live fixture now opens puzzles
+directly and retains their complete client state across replica restarts;
+only all-lines completion is persisted. It also checks the guest's opponent
+title and Guest badge. Actual sign-out still blocks owner/puzzle moves while
+leaving the independent guest capability valid. The disposable stack cleaned
+itself up; the existing development Compose stack was left running. See
+[the current verification record](verification.md#stateless-puzzles-and-match-navigation--2026-11-26).
+
 Passed on 24 November 2026 and repeated with sign-out acceptance on 25 November
 2026 using the independent local Chess worktree and the
 parent checkout's Access Gateway source at

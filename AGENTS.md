@@ -7,7 +7,8 @@ The design and phased implementation evidence live in `docs/plans/`.
 PostgreSQL is authoritative for matches, grants, guest sessions, puzzle
 definitions and completed progress. Puzzle play is stateless: replay every
 submitted decision from the immutable proof and verify the complete board set;
-never trust client FENs, completion flags or omitted defenses. No Redis, game registry, sticky sessions or runtime solver.
+never trust client FENs, completion flags or omitted defenses. No Redis, game
+registry, sticky sessions or runtime solver.
 Use pgx/database/sql, go-rel and append-only Goose migrations. Lock a match before
 its grants/session/receipts. Puzzle completion uses a monotonic owner-scoped bit
 upsert; do not create new puzzle attempts or store partial progress.

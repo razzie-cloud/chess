@@ -75,6 +75,7 @@ and [rules/opening compatibility](docs/rules-compatibility.md). All 3,397 origin
 ECO records are retained and normalized locally.
 
 Back up the complete PostgreSQL database, including capabilities, match history,
-archive, puzzle definitions and progress (plus any historical attempt rows). There is no match expiry or
-automatic match cleanup. See [release and rollback](docs/reference.md#release).
+archive, puzzle definitions and progress (plus any historical attempt rows).
+There is no match expiry or automatic match cleanup. See
+[release and rollback](docs/reference.md#release).
 Artwork/dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

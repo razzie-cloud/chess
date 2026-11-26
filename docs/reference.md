@@ -19,8 +19,8 @@
 Database migrations use Goose's PostgreSQL session lock. Startup then imports
 the embedded puzzle bundle transactionally under an advisory lock, refusing any
 changed content in an existing edition/slot. Repeated startup preserves progress
-and historical attempt rows. Match creation, moves, resignation, link changes and deletion use
-durable request receipts. An identical authorized retry returns current state;
+and historical attempt rows. Match creation, moves, resignation, link changes
+and deletion use durable request receipts. An identical authorized retry returns current state;
 changed payloads under the same key conflict. Puzzle moves carry full client
 state: an ordered decision history plus every resulting board. The server
 replays that history against immutable proof nodes, checks all FENs, paths and
@@ -35,6 +35,17 @@ The signed-in host routes `/matches`, `/matches/archive`, `/matches/new`,
 `/create` and `/puzzles/*`. Every request must carry the
 Gateway's valid request-bound v4.public assertion, UUID and matching name.
 Authentication belongs to Gateway; Chess never owns cloud login cookies.
+
+New game is the first navigation item, with normal, Fischer random and custom
+setup choices. Sessions and Archive show the latest stored position on each
+match card. Their navigation labels replace redundant page headings, as on the
+Puzzles overview. Puzzle collections use plain sections with horizontal dividers;
+number previews work on hover or keyboard focus. Match moves and access-link
+management live beside the board, with Game menu beside the match title.
+
+Public match titles show the host and guest names. The host name comes from
+verified Gateway identity at creation; older matches acquire it on their owner's
+next match visit. Until then, their public title uses “Host” as the fallback.
 
 The public host admits only `/g`, `/guest-sessions`, `/play/*`, `/watch/*` and
 `/static/*`; owner routes, puzzles, callbacks and probes return 404 there. Public

@@ -269,3 +269,67 @@ match was retained, and the old four puzzle attempts and one progress row were
 cleared. The rebuilt local Chess service imported 206 mate-in-two definitions,
 became healthy and retained the Caddy sign-in redirect. The actual Gateway login
 flow was not repeated. No production deployment or publication was performed.
+
+## Stateless puzzles and match navigation — 2026-11-26
+
+Puzzles now opens every collection with its numbered puzzles and an initial-board
+preview on hover or keyboard focus. Collection sections have no card background;
+horizontal dividers separate collections. Sessions, Archive and this overview omit
+the redundant page heading. Solved numbers have both a checkmark and color.
+
+Opening a puzzle immediately enables play. Each move submits the complete
+decision history and every board. The server reconstructs the canonical state
+from the immutable proof, rejects edited or omitted defenses, applies the move,
+and returns every updated board. Only an all-lines mate persists a completion
+bit. There are no puzzle attempt routes, partial-progress records or sessions;
+historical migration tables are retained unused. Reloading starts from the initial
+position without clearing completion. Finished boards stay mounted and locked at
+their mating positions, with the defender's king red. Next undone navigation
+prefers later puzzles and wraps within the same collection.
+
+New game is the first navigation item and opens normal, Fischer random and custom
+setup choices. Match titles show both opponents, sourcing the host name from
+verified identity; an append-only migration allows older matches to acquire that
+name on their next owner visit. Game menu sits beside the title, with move and
+access management in the side panel. Sessions and Archive use position cards.
+Explicit FEN database tags fix the unfiltered list mapper so previews contain the
+latest stored position, including completed games and the owner's orientation.
+
+Validation used Go 1.27.4, `GOCACHE=/tmp/razcloud-chess-ui-cache`, a new disposable
+loopback PostgreSQL container with isolated test schemas, and
+`CHROMIUM_EXECUTABLE_PATH=/opt/brave-bin/brave`:
+
+```sh
+gofmt -l cmd internal tests
+go build ./...
+go vet ./...
+go run ./cmd/puzzleprep verify -input internal/db/seeds/puzzles.json
+go test -json ./... -count=1
+go test -race -json ./... -count=1
+git diff --check
+```
+
+Formatting, build, vet and bundle verification passed. Regular and race suites
+each passed 162 tests/subtests across 13 tested packages; no race was reported.
+The separate opt-in live test skipped in these runs. All seven browser tests ran
+under production CSP, including both themes at 320/390/768/1440 pixels, unchanged
+polls, drafts, promotion/castling, full-state puzzle moves, rejected moves,
+locked siblings, tooltip focus/Escape, next-undone HTMX navigation, all three
+new-game choices, card positions and control alignment. All 206 published puzzle
+states replay to every required mate. Adversarial tests reject missing/duplicated
+boards, changed FENs, completion flags, paths and decisions; replica retries and
+concurrent completion bits pass without creating attempts. Representative final
+desktop/mobile screenshots were visually reviewed, including tooltip viewport
+captures, flat collections, completed red kings, side-panel controls and cards.
+
+`CHROMIUM_EXECUTABLE_PATH=/opt/brave-bin/brave scripts/live-acceptance.sh` also
+passed using newly built Gateway/Chess binaries and a disposable local stack.
+It verified real Gateway/Caddy sign-in, the guest's host-versus-guest title,
+two-sided moves and PGN, two round-robin replicas, replica restarts during a
+match and full-state puzzle, durable completion, and actual Gateway sign-out
+blocking owner/puzzle moves while preserving independent guest access. The
+script removed its stack; the separate test PostgreSQL container was removed.
+The pre-existing Air Compose Chess container remained healthy.
+
+Firefox/Safari and physical authenticators were not exercised. No production
+database, Docker context, deployment, image publication or remote was changed.
