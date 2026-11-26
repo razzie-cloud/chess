@@ -36,12 +36,14 @@ type Store struct {
 func New(db *sql.DB) *Store { return &Store{DB: db, repo: rel.New(postgres.New(db))} }
 
 type Match struct {
-	ID, CreatorID, CreatorName, CreatorColor, GuestName, Mode, InitialFEN, CurrentFEN string
-	Revision                                                                          int64
-	Status, Result, Reason                                                            string
-	Tags                                                                              json.RawMessage
-	CreatedAt, UpdatedAt                                                              time.Time
-	CompletedAt                                                                       *time.Time
+	ID, CreatorID, CreatorName, CreatorColor, GuestName, Mode string
+	InitialFEN                                                string `db:"initial_fen"`
+	CurrentFEN                                                string `db:"current_fen"`
+	Revision                                                  int64
+	Status, Result, Reason                                    string
+	Tags                                                      json.RawMessage
+	CreatedAt, UpdatedAt                                      time.Time
+	CompletedAt                                               *time.Time
 }
 
 func (Match) Table() string { return "matches" }

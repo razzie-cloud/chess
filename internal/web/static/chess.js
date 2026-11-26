@@ -69,6 +69,13 @@
     document.querySelector('[data-copy-playing]')?.addEventListener('click', () => copy(document.querySelector('[data-playing-link]').value));
     document.querySelector('[data-close]')?.addEventListener('click', event => event.target.closest('dialog').close());
 
+    document.querySelectorAll('[data-match-fen]').forEach(element => {
+      const board = Chessboard(element, {position: element.dataset.matchFen, orientation: element.dataset.color === 'b' ? 'black' : 'white', showNotation: false, pieceTheme: '/static/pieces/{piece}.png'});
+      const observer = new ResizeObserver(() => board.resize());
+      observer.observe(element);
+      cleaners.push(() => { observer.disconnect(); board.destroy(); });
+    });
+
     const panel = document.querySelector('#match-panel');
     if (!panel) return;
     const resource = panel.dataset.resource, base = panel.dataset.base;

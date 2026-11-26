@@ -21,13 +21,16 @@
       form.setAttribute('hx-sync', '#main:replace');
     });
     const current = path.startsWith('/puzzle') ? '/puzzles' : path === '/matches/archive' ? path : path === '/matches/new' || path === '/create' ? '/matches/new' : '/matches';
-    document.querySelectorAll('.app-nav a').forEach(link => {
-      if (link.getAttribute('href') === current) link.setAttribute('aria-current', 'page');
+    document.querySelectorAll('.app-nav [data-nav]').forEach(link => {
+      if (link.dataset.nav === current) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
     htmx.process(root);
   };
   addEventListener('DOMContentLoaded', () => enhance(document));
+  document.addEventListener('htmx:beforeRequest', event => {
+    if (event.detail.target?.id === 'main') document.querySelectorAll('.game-menu:popover-open').forEach(menu => menu.hidePopover());
+  });
   document.addEventListener('htmx:beforeSwap', event => {
     if (event.detail.target?.id !== 'main') return;
     const status = event.detail.xhr.status;
