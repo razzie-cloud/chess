@@ -8,6 +8,46 @@ Swarm, broker policies, helper fixtures, tag selection and Caddy validation.
 [Live acceptance](live-acceptance.md) separately records real Gateway sessions,
 virtual passkeys, anonymous guest play, round-robin replicas, restarts and sign-out.
 
+## Stateless puzzle play — 26 November 2026
+
+The current puzzle flow supersedes the attempt/session behavior recorded in the
+original implementation evidence below. Collection overviews include all puzzle
+numbers, done markers and lazy initial-board previews on hover or keyboard
+focus. Opening a puzzle immediately mounts a playable board. Its only persistent
+personal state is the completion bit; reloading begins at the initial position.
+
+Every JSON move carries the complete ordered decision history and every board.
+The server rebuilds the state from the immutable proof and compares the exact
+board set before accepting another decision. Responses carry every updated board
+and the next undone destination. Dropped/duplicated defenses, forged FENs,
+completion flags, budgets and paths are rejected. Any legal immediate mate is
+still accepted. A completed defense remains locked at its last position with
+the checked king highlighted red; the personal bit is set only when all defenses
+are complete. Puzzle start/end/resume, receipt and export routes were removed;
+historical database tables remain unchanged and unused.
+
+Focused checks used disposable loopback PostgreSQL, Chromium and the isolated
+Go cache. `go test ./internal/puzzle ./internal/store ./internal/app -run
+'Test(VerifyPuzzle|Puzzle|EveryPublishedPuzzle|BrowserPuzzle)' -count=1 -v`
+passed all 21 focused checks. They covered every bundled puzzle's full-state replay, adversarial board/history
+claims, alternate immediate mates, required defense completion, independent
+replicas/retries, concurrent bits 0/255, separate editions and owner-scoped
+progress. Browser checks cover collection/detail HTMX transitions, keyboard
+and hover preview hooks, immediate play, rejected provisional moves, complete
+request state, persistent sibling board/dialog nodes, locked red-king boards,
+next-undone navigation and cleanup. Collection layouts run in both themes at
+320/390/768/1440 pixels; locked-board captures cover 390/1440. Responsive checks
+wait for chessboard.js to finish resizing. Headless keyboard acceptance brings
+the page to the front before programmatic focus.
+
+Production screenshots of collection tooltips and partial/completed defenses
+were captured and visually inspected in both themes at desktop/mobile sizes.
+Viewport-only tooltip captures avoid full-page screenshot resizing hiding the
+fixed preview. A visual check caught scrollbar clipping on mobile; placement now
+uses the document's client width. Final integrated build/vet/full/race and live
+Gateway checks are recorded separately by the coordinating change. This slice
+did not publish images or deploy anything.
+
 ## Final service checks
 
 Commands ran inside `chess/`, using Go 1.27.4 and an isolated writable build

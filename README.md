@@ -1,7 +1,7 @@
 # Chess
 
 Razzie Cloud's independent Go Chess service. PostgreSQL owns matches, guest and
-viewing grants, resumable puzzle attempts and personal completion. Browsers use
+viewing grants, immutable puzzle definitions and personal completion. Browsers use
 ordinary POST moves and HTMX state updates; there are no game WebSockets,
 process-local sessions, Redis dependency or runtime puzzle search.
 
@@ -10,6 +10,15 @@ a private playing link. The opponent needs no account. A separate viewing link
 is read-only. Matches remain until their creator explicitly deletes them;
 completed matches appear in the Archive. Cloud administrators have no additional
 access to other users' matches or puzzles.
+
+Puzzles open ready to play from an overview containing every collection and
+number, with initial-board previews on hover or keyboard focus. Every move sends
+the complete history and all boards; the server replays them against the prepared
+proof before replying with every updated board. All defense lines must reach
+checkmate before personal progress changes from undone to done. Completed boards
+stay locked at their final positions. There are no puzzle sessions: reloading a
+puzzle starts from its initial position; completed progress stays saved. The
+navigation button opens the collection's next undone puzzle.
 
 The repository is registered locally as the parent's `chess` submodule, with
 the intended origin `git@github.com:razzie-cloud/chess.git`. That remote and its
@@ -66,6 +75,6 @@ and [rules/opening compatibility](docs/rules-compatibility.md). All 3,397 origin
 ECO records are retained and normalized locally.
 
 Back up the complete PostgreSQL database, including capabilities, match history,
-archive, puzzle definitions, attempts and progress. There is no match expiry or
+archive, puzzle definitions and progress (plus any historical attempt rows). There is no match expiry or
 automatic match cleanup. See [release and rollback](docs/reference.md#release).
 Artwork/dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

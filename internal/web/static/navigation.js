@@ -41,6 +41,7 @@
     document.dispatchEvent(new Event('chess:mount'));
     document.querySelector('[data-error-summary]')?.focus();
   });
+  document.addEventListener('chess:navigation', event => enhance(event.detail));
   const interrupted = event => {
     if (event.detail.target?.id !== 'main' && event.detail.requestConfig?.target?.id !== 'main') return;
     let notice = document.querySelector('#navigation-error');

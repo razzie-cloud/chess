@@ -92,7 +92,7 @@ func TestLiveGatewaySSOAndAnonymousGuest(t *testing.T) {
 	owner.Run(`const response=await fetch(el('#match-panel').dataset.base+'/state');const doc=new DOMParser().parseFromString(await response.text(),'text/html');assert(JSON.parse(doc.querySelector('#match-state').dataset.state).status==='pending','preview activated match');`)
 	guest.Eval(`document.querySelector('#guest-continue').click()`)
 	liveWait(t, guest, `location.pathname.startsWith('/play/')&&document.querySelector('#match-board img')`)
-	guest.Run(`assert(!document.querySelector('.identity'),'guest has cloud registration');assert((await fetch('/puzzles')).status===404,'public proxy exposed personal puzzles');`)
+	guest.Run(`assert(!document.querySelector('[aria-label="Signed-in account"]'),'guest has cloud registration');assert(el('[aria-label="Guest player"] .badge').textContent==='Guest','guest badge missing');assert(el('h1').textContent==='chess-live-owner vs Anonymous live guest','guest opponent title');assert((await fetch('/puzzles')).status===404,'public proxy exposed personal puzzles');`)
 	owner.Run(`await wait(()=>JSON.parse(el('#match-state').dataset.state).status==='active');el('input[name=uci]').value='e2e4';el('#move-form').requestSubmit();await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===2);`)
 	restartLiveReplica(t)
 	guest.Run(`await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===2);el('input[name=uci]').value='e7e5';el('#move-form').requestSubmit();await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===3);const response=await fetch(el('#match-panel').dataset.base+'/export/pgn');assert(response.ok,'guest export denied');assert((await response.text()).includes('1. e4 e5'),'guest export lost played history');`)
@@ -115,21 +115,21 @@ func TestLiveGatewaySSOAndAnonymousGuest(t *testing.T) {
 		t.Fatal("live fixture requires its reviewed branching seed")
 	}
 	owner.Navigate(origin + "/puzzles/razchess-mates-v1/9")
-	owner.Eval(`document.querySelector('form[action$="/attempts"]').requestSubmit()`)
-	liveWait(t, owner, `location.pathname.startsWith('/puzzle-attempts/')&&document.querySelector('.puzzle-move')`)
-	owner.Run(`const form=el('.puzzle-move');form.elements.uci.value=` + browser.Quote(definition.Root.Move) + `;form.requestSubmit();await wait(()=>Number(el('#attempt-state').dataset.revision)===1);assert(document.querySelectorAll('.branch').length===3,'compiled fork not expanded');`)
+	liveWait(t, owner, `document.querySelector('.puzzle-move')`)
+	owner.Run(`const form=el('.puzzle-move');form.elements.uci.value=` + browser.Quote(definition.Root.Move) + `;form.requestSubmit();await wait(()=>Number(el('#puzzle-state').dataset.revision)===1);assert(document.querySelectorAll('.branch').length===2,'compiled fork not expanded');`)
 	restartLiveReplica(t)
-	var attemptURL string
-	if err := json.Unmarshal(owner.Eval(`location.href`), &attemptURL); err != nil {
+	var puzzleURL string
+	if err := json.Unmarshal(owner.Eval(`location.href`), &puzzleURL); err != nil {
 		t.Fatal(err)
 	}
-	owner.Navigate(attemptURL)
+	// The client retains its full state while replicas restart.
+	owner.Run(`assert(JSON.parse(el('#puzzle-state').dataset.state).boards.length===2,'client lost branching state');`)
 	for decision := 0; decision < definition.Decisions; decision++ {
 		var branches []struct {
 			ID   string   `json:"id"`
 			Path []string `json:"path"`
 		}
-		raw := owner.Eval(`[...document.querySelectorAll('.branch-state[data-status=pending]')].map(node=>({id:node.dataset.branch,path:JSON.parse(node.dataset.path)}))`)
+		raw := owner.Eval(`[...document.querySelectorAll('.branch-state[data-done=false]')].map(node=>({id:node.dataset.branch,path:JSON.parse(node.dataset.path)}))`)
 		if err := json.Unmarshal(raw, &branches); err != nil {
 			t.Fatal(err)
 		}
@@ -140,22 +140,22 @@ func TestLiveGatewaySSOAndAnonymousGuest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		owner.Run(`const branch=[...document.querySelectorAll('.branch')].find(node=>node.dataset.branch===` + browser.Quote(branches[0].ID) + `);const revision=Number(el('#attempt-state').dataset.revision);const form=branch.querySelector('form');form.elements.uci.value=` + browser.Quote(node.Move) + `;form.requestSubmit();await wait(()=>Number(el('#attempt-state').dataset.revision)===revision+1);`)
+		owner.Run(`const branch=[...document.querySelectorAll('.branch')].find(node=>node.dataset.branch===` + browser.Quote(branches[0].ID) + `);const revision=Number(el('#puzzle-state').dataset.revision);const form=branch.querySelector('form');form.elements.uci.value=` + browser.Quote(node.Move) + `;form.requestSubmit();await wait(()=>Number(el('#puzzle-state').dataset.revision)===revision+1);`)
 	}
-	owner.Run(`assert(el('#attempt-state').dataset.status==='solved','not every branch completed');`)
+	owner.Run(`assert(el('#puzzle-state').dataset.done==='true','not every branch completed');`)
 	owner.Navigate(origin + "/puzzles/razchess-mates-v1")
 	owner.Run(`assert(document.querySelector('.puzzle-grid a.solved[href$="/9"]'),'personal completion bit missing after restart');`)
 	// Both pages use the same actual Gateway session, so its real sign-out must
 	// expire their access while leaving the independent guest capability valid.
 	puzzleBrowser := liveSessionBrowser(t, owner, origin, auth)
-	puzzleBrowser.Navigate(attemptURL)
+	puzzleBrowser.Navigate(puzzleURL)
 	owner.Navigate(origin + "/matches/" + matchID)
 	signoutBrowser := liveSessionBrowser(t, owner, origin, auth)
 	signoutBrowser.Navigate(auth + "/")
 	signoutBrowser.Run(`el('form[hx-post="/ui/logout"]').requestSubmit();await wait(()=>!document.querySelector('.identity strong'));`)
 	liveWait(t, owner, `document.querySelector('#connection [data-sign-in]')`)
 	owner.Run(`assert(el('#move-form button[type=submit]').disabled,'expired match still accepts moves');assert(!document.querySelector('form[data-webauthn]'),'login page replaced board');assert(el('#connection [data-sign-in]').getAttribute('href').startsWith('/matches/'),'sign-in link is not native same-origin');`)
-	puzzleBrowser.Run(`dispatchEvent(new Event('focus'));await wait(()=>document.querySelector('#puzzle-message [data-sign-in]'));assert(el('form[action$="/end"] button').disabled,'expired attempt can still mutate');assert(el('#puzzle-panel'),'login page replaced attempt');`)
+	puzzleBrowser.Run(`const form=el('.puzzle-move');form.elements.uci.value=` + browser.Quote(definition.Root.Move) + `;form.requestSubmit();await wait(()=>document.querySelector('#puzzle-message [data-sign-in]'));assert(el('.puzzle-move button').disabled,'expired puzzle can still mutate');assert(el('#puzzle-panel'),'login page replaced puzzle');`)
 	guest.Run(`const res=await fetch(el('#match-panel').dataset.base+'/export/pgn');assert(res.ok,'cloud sign-out revoked independent guest');assert((await res.text()).includes('1. e4 e5'),'guest history changed after cloud sign-out');`)
 	owner.AssertNoErrors()
 	puzzleBrowser.AssertNoErrors()

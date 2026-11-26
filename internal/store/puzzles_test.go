@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/razzie-cloud/chess/internal/db"
-	"github.com/razzie-cloud/chess/internal/game"
 	"github.com/razzie-cloud/chess/internal/puzzle"
 )
 
@@ -41,57 +40,31 @@ func seedFixture(t *testing.T, s *Store) string {
 	return b.Collections[0].ID
 }
 
-func startPuzzle(t *testing.T, s *Store, owner, collection string, slot int) Attempt {
+func solvePuzzle(t *testing.T, s *Store, owner, collection string, slot int) puzzle.PlayState {
 	t.Helper()
-	a, err := s.StartAttempt(t.Context(), owner, collection, slot, uuid.NewString(), false)
+	d, err := s.Definition(t.Context(), collection, slot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return a
-}
-
-func prescribed(t *testing.T, s *Store, a Attempt, branch PuzzleBranch) PuzzleMove {
-	t.Helper()
-	d, err := s.Definition(t.Context(), a.CollectionID, a.Slot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	n, err := puzzle.Lookup(d, branch.Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return PuzzleMove{Branch: branch.ID, ContentDigest: a.Digest, Path: append([]string{}, branch.Path...), UCI: n.Move, Revision: a.Revision}
-}
-
-func stepPuzzle(t *testing.T, s *Store, a Attempt, branch PuzzleBranch) Attempt {
-	t.Helper()
-	next, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, prescribed(t, s, a, branch))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return next
-}
-
-func solvePuzzle(t *testing.T, s *Store, a Attempt) Attempt {
-	t.Helper()
-	for range 20 {
-		if a.Status == "solved" {
-			return a
-		}
-		found := false
-		for _, b := range a.Branches {
-			if b.Status == "pending" {
-				a = stepPuzzle(t, s, a, b)
-				found = true
+	state := puzzle.InitialState(d)
+	for !state.Done() {
+		var branch puzzle.Board
+		for _, b := range state.Boards {
+			if !b.Done {
+				branch = b
 				break
 			}
 		}
-		if !found {
-			t.Fatalf("attempt has no pending branches: %+v", a)
+		node, err := puzzle.Lookup(d, branch.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, state, err = s.PlayPuzzle(t.Context(), owner, collection, slot, PuzzleMove{ContentDigest: d.Digest, State: state, Decision: puzzle.Decision{Branch: branch.ID, UCI: node.Move}})
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
-	t.Fatal("puzzle did not terminate")
-	return a
+	return state
 }
 
 func TestPuzzleSeedConcurrentImmutableAndEditionProgress(t *testing.T) {
@@ -113,7 +86,7 @@ func TestPuzzleSeedConcurrentImmutableAndEditionProgress(t *testing.T) {
 	}
 	owner := uuid.NewString()
 	collection := bundle.Collections[0].ID
-	solvePuzzle(t, s, startPuzzle(t, s, owner, collection, 0))
+	solvePuzzle(t, s, owner, collection, 0)
 	changed := fixtureBundle(t)
 	changed.Collections[0].Puzzles[0].Mate++
 	changed.Collections[0].Puzzles[0].Digest = puzzle.ContentDigest(changed.Collections[0].Puzzles[0])
@@ -149,154 +122,84 @@ func TestPuzzleSeedConcurrentImmutableAndEditionProgress(t *testing.T) {
 	}
 }
 
-func TestPuzzleForkRequiresEveryLineAndReplaysRetiredTransitions(t *testing.T) {
+func TestPuzzleFullStateAllLinesProgressAndReplicaRetries(t *testing.T) {
 	s := isolatedStore(t, 1)
 	collection := seedFixture(t, s)
-	owner, stranger := uuid.NewString(), uuid.NewString()
-	a := startPuzzle(t, s, owner, collection, 9)
-	_, err := s.Attempt(t.Context(), a.ID, stranger)
-	requireDenied(t, err)
-	first := prescribed(t, s, a, a.Branches[0])
-	wrong := first
-	wrong.UCI = "a1a2"
-	if _, err := s.PuzzleMove(t.Context(), a.ID, owner, wrong); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("non-prescribed move accepted: %v", err)
-	}
-	if next, err := s.Attempt(t.Context(), a.ID, owner); err != nil || next.Revision != 0 {
-		t.Fatal("incorrect move changed state")
-	}
-	forged := first
-	forged.Path = []string{first.UCI, "a1a2"}
-	if _, err := s.PuzzleMove(t.Context(), a.ID, owner, forged); err == nil {
-		t.Fatal("node jump accepted")
-	}
-	if _, err := s.PuzzleMove(t.Context(), a.ID, stranger, first); !errors.Is(err, ErrDenied) {
-		t.Fatal("cross-user move accepted")
-	}
-	a, err = s.PuzzleMove(t.Context(), a.ID, owner, first)
+	owner := uuid.NewString()
+	d, err := s.Definition(t.Context(), collection, 9)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(a.Branches) != 3 || a.Branches[0].Status != "expanded" {
-		t.Fatalf("missing two child boards: %+v", a.Branches)
+	first := PuzzleMove{ContentDigest: d.Digest, State: puzzle.InitialState(d), Decision: puzzle.Decision{Branch: "root", UCI: d.Root.Move}}
+	_, state, err := s.PlayPuzzle(t.Context(), owner, collection, 9, first)
+	if err != nil || len(state.Boards) != 2 {
+		t.Fatalf("fork: %+v %v", state, err)
 	}
-	stale := prescribed(t, s, a, a.Branches[2])
-	a = stepPuzzle(t, s, a, a.Branches[1])
-	if a.Status != "active" {
-		t.Fatal("first completed line solved the entire puzzle")
+	// Independent replica needs no attempt or receipt state.
+	second := New(s.DB)
+	_, retry, err := second.PlayPuzzle(t.Context(), owner, collection, 9, first)
+	if err != nil || len(retry.Boards) != 2 {
+		t.Fatalf("retry: %v", err)
+	}
+	b := state.Boards[0]
+	node, _ := puzzle.Lookup(d, b.Path)
+	_, state, err = second.PlayPuzzle(t.Context(), owner, collection, 9, PuzzleMove{ContentDigest: d.Digest, State: state, Decision: puzzle.Decision{Branch: b.ID, UCI: node.Move}})
+	if err != nil || !state.Boards[0].Done || state.Done() {
+		t.Fatalf("partial: %+v %v", state, err)
 	}
 	cards, err := s.Collections(t.Context(), owner)
 	if err != nil || cards[0].Solved != 0 {
-		t.Fatal("partial completion awarded bit")
+		t.Fatal("partial solve awarded progress")
 	}
-	if _, err := s.PuzzleMove(t.Context(), a.ID, owner, stale); !errors.Is(err, ErrConflict) {
-		t.Fatal("stale other-tab revision accepted")
+	b = state.Boards[1]
+	node, _ = puzzle.Lookup(d, b.Path)
+	final := PuzzleMove{ContentDigest: d.Digest, State: state, Decision: puzzle.Decision{Branch: b.ID, UCI: node.Move}}
+	_, state, err = s.PlayPuzzle(t.Context(), owner, collection, 9, final)
+	if err != nil || !state.Done() {
+		t.Fatalf("completion: %v", err)
 	}
-	a = solvePuzzle(t, s, a)
-	for _, b := range a.Branches {
-		if b.Status != "solved" {
-			t.Fatal("parent did not become solved after all children")
-		}
-	}
-	replay, err := s.PuzzleMove(t.Context(), a.ID, owner, first)
-	if err != nil || replay.Status != "solved" || replay.Revision != a.Revision {
-		t.Fatalf("retired source retry failed: %v", err)
-	}
-	first.UCI = "a1a2"
-	if _, err := s.PuzzleMove(t.Context(), a.ID, owner, first); !errors.Is(err, ErrPayload) {
-		t.Fatal("changed accepted transition payload accepted")
+	if _, _, err = second.PlayPuzzle(t.Context(), owner, collection, 9, final); err != nil {
+		t.Fatal(err)
 	}
 	cards, err = s.Collections(t.Context(), owner)
 	if err != nil || cards[0].Solved != 1 {
-		t.Fatal("all-lines solve failed to set bit")
+		t.Fatal("all lines did not award progress")
 	}
-	for _, slot := range cards[0].Slots {
-		if slot.Slot == 9 && !slot.Solved {
-			t.Fatal("solved slot not reported")
-		}
+	other, err := s.Collections(t.Context(), uuid.NewString())
+	if err != nil || other[0].Solved != 0 {
+		t.Fatal("progress crossed users")
 	}
-}
-
-func TestPuzzle15AcceptsBishopAndQueenMates(t *testing.T) {
-	for _, uci := range []string{"d3g6", "h5g6"} {
-		t.Run(uci, func(t *testing.T) {
-			s := isolatedStore(t, 1)
-			if err := s.Seed(t.Context()); err != nil {
-				t.Fatal(err)
-			}
-			a := startPuzzle(t, s, uuid.NewString(), "razchess-mates-v1", 14)
-			a = stepPuzzle(t, s, a, a.Branches[0])
-			branch := a.Branches[1] // 1.Qxh5+ Rg6, leaving the queen on h5.
-			in := prescribed(t, s, a, branch)
-			for _, wrong := range []string{"h5h4", "h5e8", "z9z9"} {
-				in.UCI = wrong
-				if _, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in); !errors.Is(err, ErrInvalid) {
-					t.Fatalf("non-mating move %s accepted: %v", wrong, err)
-				}
-			}
-			in.UCI = uci
-			next, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if next.Status != "active" || next.Revision != a.Revision+1 {
-				t.Fatal("one mate must leave the other defense pending")
-			}
-			a, err = s.Attempt(t.Context(), a.ID, a.OwnerID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			played, err := a.PlayedBranch(branch.ID)
-			if err != nil || played.Status != "solved" || played.Path[len(played.Path)-1] != uci {
-				t.Fatalf("actual mate was not saved: %+v %v", played, err)
-			}
-			g, err := game.Replay(a.InitialFEN, played.Path, false)
-			if err != nil || g.Reason != "checkmate" || g.Board.Fen() != played.FEN {
-				t.Fatalf("saved mate does not replay: %v", err)
-			}
-			cards, err := s.Collections(t.Context(), a.OwnerID)
-			if err != nil || cards[0].Solved != 0 {
-				t.Fatal("one mate awarded collection progress")
-			}
-			retry, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in)
-			if err != nil || retry.Revision != a.Revision {
-				t.Fatalf("mate retry changed state: %v", err)
-			}
-			a = solvePuzzle(t, s, a)
-			retry, err = s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in)
-			if err != nil || retry.Status != "solved" || retry.Revision != a.Revision {
-				t.Fatalf("completed mate retry failed: %v", err)
-			}
-			in.UCI = "d3g6"
-			if uci == in.UCI {
-				in.UCI = "h5g6"
-			}
-			if _, err := s.PuzzleMove(t.Context(), a.ID, a.OwnerID, in); !errors.Is(err, ErrPayload) {
-				t.Fatal("changed mate retry accepted")
-			}
-			cards, err = s.Collections(t.Context(), a.OwnerID)
-			if err != nil || cards[0].Solved != 1 {
-				t.Fatal("both mates did not award collection progress")
-			}
-		})
+	var attempts int
+	if err = s.DB.QueryRow(`SELECT count(*) FROM puzzle_attempts`).Scan(&attempts); err != nil || attempts != 0 {
+		t.Fatal("stateless play created attempts")
 	}
 }
 
-func TestPuzzleParallelBitsSlotsZeroAnd255AndRequestReceipts(t *testing.T) {
+func TestPuzzleParallelCompletionBitsAndThreeBoards(t *testing.T) {
 	s := isolatedStore(t, 4)
 	collection := seedFixture(t, s)
 	owner := uuid.NewString()
-	var attempts []Attempt
-	var final []PuzzleMove
-	for _, slot := range []int{0, 255} {
-		a := startPuzzle(t, s, owner, collection, slot)
-		a = stepPuzzle(t, s, a, a.Branches[0])
-		attempts = append(attempts, a)
-		final = append(final, prescribed(t, s, a, a.Branches[0]))
-	}
 	results := make(chan error, 2)
-	for i, a := range attempts {
-		go func() { _, err := s.PuzzleMove(t.Context(), a.ID, owner, final[i]); results <- err }()
+	for _, slot := range []int{0, 255} {
+		d, err := s.Definition(t.Context(), collection, slot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := puzzle.InitialState(d)
+		for {
+			b := state.Boards[0]
+			node, _ := puzzle.Lookup(d, b.Path)
+			next, err := puzzle.Advance(d, state, puzzle.Decision{Branch: b.ID, UCI: node.Move})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if next.Done() {
+				in := PuzzleMove{ContentDigest: d.Digest, State: state, Decision: puzzle.Decision{Branch: b.ID, UCI: node.Move}}
+				go func() { _, _, err := s.PlayPuzzle(t.Context(), owner, collection, slot, in); results <- err }()
+				break
+			}
+			state = next
+		}
 	}
 	for range 2 {
 		if err := <-results; err != nil {
@@ -305,63 +208,11 @@ func TestPuzzleParallelBitsSlotsZeroAnd255AndRequestReceipts(t *testing.T) {
 	}
 	var count, first, last int
 	if err := s.DB.QueryRow(`SELECT bit_count(solved),get_bit(solved,0),get_bit(solved,255) FROM user_puzzle_progress WHERE user_id=$1 AND collection_id=$2`, owner, collection).Scan(&count, &first, &last); err != nil || count != 2 || first != 1 || last != 1 {
-		t.Fatalf("parallel progress lost bits: %d %d %d %v", count, first, last, err)
+		t.Fatalf("lost progress bits: %d %d %d %v", count, first, last, err)
 	}
-	request := uuid.NewString()
-	a, err := s.StartAttempt(t.Context(), owner, collection, 0, request, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	replay, err := s.StartAttempt(t.Context(), owner, collection, 0, request, true)
-	if err != nil || replay.ID != a.ID {
-		t.Fatal("start receipt did not replay")
-	}
-	if _, err := s.StartAttempt(t.Context(), owner, collection, 255, request, true); !errors.Is(err, ErrPayload) {
-		t.Fatal("start receipt accepted changed payload")
-	}
-	end := uuid.NewString()
-	ended, err := s.EndAttempt(t.Context(), a.ID, owner, end, a.Revision)
-	if err != nil || ended.Status != "ended" {
-		t.Fatal("end failed")
-	}
-	replay, err = s.EndAttempt(t.Context(), a.ID, owner, end, a.Revision)
-	if err != nil || replay.Revision != ended.Revision {
-		t.Fatal("end receipt did not replay")
-	}
-	if _, err := s.EndAttempt(t.Context(), a.ID, owner, end, a.Revision+1); !errors.Is(err, ErrPayload) {
-		t.Fatal("end changed payload accepted")
-	}
-	solvePuzzle(t, s, startPuzzle(t, s, owner, collection, 0))
-	if err := s.DB.QueryRow(`SELECT bit_count(solved) FROM user_puzzle_progress WHERE user_id=$1 AND collection_id=$2`, owner, collection).Scan(&count); err != nil || count != 2 {
-		t.Fatal("repeat solve/end cleared or duplicated bits")
-	}
-}
-
-func TestPuzzleThreeReplyForkRestartAndOneConnectionPool(t *testing.T) {
-	s := isolatedStore(t, 1)
-	collection := seedFixture(t, s)
-	owner := uuid.NewString()
-	a := startPuzzle(t, s, owner, collection, 34)
-	a = stepPuzzle(t, s, a, a.Branches[0])
-	if len(a.Branches) != 4 {
-		t.Fatal("three defenses not materialized")
-	}
-	resumed := startPuzzle(t, s, owner, collection, 34)
-	if resumed.ID != a.ID || resumed.Revision != a.Revision {
-		t.Fatal("partial attempt did not resume")
-	}
-	restarted, err := s.StartAttempt(t.Context(), owner, collection, 34, uuid.NewString(), true)
-	if err != nil || restarted.ID == a.ID {
-		t.Fatal("restart did not make fresh attempt")
-	}
-	old, err := s.Attempt(t.Context(), a.ID, owner)
-	if err != nil || old.Status != "ended" {
-		t.Fatal("restart left old attempt live")
-	}
-	a = solvePuzzle(t, s, restarted)
-	last := New(s.DB)
-	after, err := last.Attempt(t.Context(), a.ID, owner)
-	if err != nil || after.Status != "solved" || after.Revision != a.Revision {
-		t.Fatal("replica restart lost attempt")
+	solvePuzzle(t, s, owner, collection, 0)
+	state := solvePuzzle(t, New(s.DB), owner, collection, 34)
+	if len(state.Boards) != 3 || !state.Done() {
+		t.Fatal("three-line puzzle incomplete")
 	}
 }

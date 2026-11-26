@@ -19,15 +19,20 @@
 Database migrations use Goose's PostgreSQL session lock. Startup then imports
 the embedded puzzle bundle transactionally under an advisory lock, refusing any
 changed content in an existing edition/slot. Repeated startup preserves progress
-and attempts. Match creation, moves, resignation, link changes and deletion use
+and historical attempt rows. Match creation, moves, resignation, link changes and deletion use
 durable request receipts. An identical authorized retry returns current state;
-changed payloads under the same key conflict. Puzzle moves key receipts by the
-exact owned branch and canonical source path, including automatic defenses.
+changed payloads under the same key conflict. Puzzle moves carry full client
+state: an ordered decision history plus every resulting board. The server
+replays that history against immutable proof nodes, checks all FENs, paths and
+completion flags, and retains every mandatory defense. Only an all-lines mate
+writes the signed-in user’s monotonic completion bit; no puzzle attempt,
+session, partial progress or receipt is stored. Identical retries produce the
+same result. Reloading starts a fresh board without clearing completed progress.
 
 ## HTTP and capabilities
 
 The signed-in host routes `/matches`, `/matches/archive`, `/matches/new`,
-`/create`, `/puzzles` and `/puzzle-attempts/*`. Every request must carry the
+`/create` and `/puzzles/*`. Every request must carry the
 Gateway's valid request-bound v4.public assertion, UUID and matching name.
 Authentication belongs to Gateway; Chess never owns cloud login cookies.
 
@@ -52,7 +57,7 @@ Revocation affects page reads, polling, presence and exports. A UUID alone grant
 no public read access. Both grants have no time-based expiry. Never log raw
 playing tokens, viewing URLs, cookies, request bodies or backend errors.
 
-All POSTs require the exact configured Origin, bounded form bodies and current
+All POSTs require the exact configured Origin, bounded request bodies and current
 authorization. Native success uses redirects where appropriate; move HTMX
 responses update only the state fragment. Stale writes return 409, invalid or
 non-prescribed moves 422, unavailable storage 503 and unavailable capabilities
@@ -76,8 +81,7 @@ promotion dialogs, orientation, annotations and sibling puzzle boards survive
 routine state changes. HTMX panel navigation retains the shell; Back/Forward
 reloads fresh authorized state rather than a stored history snapshot.
 
-FEN/PGN/GIF endpoints live beneath their authorized match or played puzzle
-branch. Puzzle exports contain only the acknowledged selected path. GIFs use
+FEN/PGN/GIF endpoints live beneath their authorized match. GIFs use
 local raster artwork, include the initial and every played position, and carry
 the artwork attribution in a GIF comment. Database snapshots are released before
 rendering. Limits are explicit and never silently truncate a game:

@@ -2,7 +2,6 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -10,47 +9,37 @@ import (
 
 	"github.com/malbrecht/chess"
 	"github.com/razzie-cloud/chess/internal/game"
+	"github.com/razzie-cloud/chess/internal/puzzle"
 	"github.com/razzie-cloud/chess/internal/store"
 )
 
 type PuzzleView struct {
-	Collections                    []store.PuzzleCollection
-	Collection                     *store.PuzzleCollection
-	Attempt                        *store.Attempt
-	Branches                       []BranchView
-	Slot                           int
-	Title, FEN, Solver, Error      string
-	Mate                           int
-	ActiveBranches, CompletedLines int
+	Collections                                  []store.PuzzleCollection
+	Collection                                   *store.PuzzleCollection
+	State                                        puzzle.PlayState
+	Branches                                     []BranchView
+	Slot, Mate                                   int
+	Title, Solver, Digest, CollectionID, NextURL string
+	Done                                         bool
+	ActiveBranches, CompletedLines               int
 }
 type BranchView struct {
-	store.PuzzleBranch
-	Revision                                   int64
-	Digest, Solver, AttemptID, PathJSON, Label string
+	puzzle.Board
+	Solver, Base, PathJSON, Label, CheckSquare string
 	Legal                                      []string
-	Parent                                     bool
-	Playable                                   bool
-	CheckSquare                                string
 }
 
 func (s *Server) puzzleRoutes(p *http.ServeMux) {
 	p.HandleFunc("GET /puzzles", s.collections)
 	p.HandleFunc("GET /puzzles/{collection}", s.collections)
 	p.HandleFunc("GET /puzzles/{collection}/{slot}", s.puzzleDetail)
-	p.HandleFunc("POST /puzzles/{collection}/{slot}/attempts", s.startAttempt)
-	p.HandleFunc("GET /puzzle-attempts/{id}", s.attemptPage)
-	p.HandleFunc("GET /puzzle-attempts/{id}/state", s.attemptState)
-	p.HandleFunc("POST /puzzle-attempts/{id}/branches/{branch}/moves", s.puzzleMove)
-	p.HandleFunc("POST /puzzle-attempts/{id}/end", s.endAttempt)
-	for _, format := range []string{"fen", "pgn", "gif"} {
-		p.HandleFunc("GET /puzzle-attempts/{id}/branches/{branch}/export/"+format, s.puzzleExport)
-	}
+	p.HandleFunc("POST /puzzles/{collection}/{slot}/moves", s.puzzleMove)
 }
 func (s *Server) collections(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "Puzzles")
-	all, e := s.store.Collections(r.Context(), p.User.ID)
-	if e != nil {
-		s.fail(w, r, e)
+	all, err := s.store.Collections(r.Context(), p.User.ID)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	v := PuzzleView{Collections: all}
@@ -58,7 +47,6 @@ func (s *Server) collections(w http.ResponseWriter, r *http.Request) {
 		for i := range all {
 			if all[i].ID == id {
 				v.Collection = &all[i]
-				p.Title = all[i].Title
 				break
 			}
 		}
@@ -70,64 +58,48 @@ func (s *Server) collections(w http.ResponseWriter, r *http.Request) {
 	p.Puzzle = v
 	s.render(w, r, "collections", p, 200)
 }
-func (s *Server) puzzleDetail(w http.ResponseWriter, r *http.Request) {
-	slot, e := strconv.Atoi(r.PathValue("slot"))
-	if e != nil {
-		s.fail(w, r, store.ErrDenied)
-		return
-	}
-	d, e := s.store.Definition(r.Context(), r.PathValue("collection"), slot)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
+func (s *Server) puzzleData(r *http.Request, d puzzle.Definition, state puzzle.PlayState) (Page, error) {
 	p := s.page(r, d.Title)
-	p.Base = "/puzzles/" + r.PathValue("collection") + "/" + strconv.Itoa(slot)
-	p.Puzzle = PuzzleView{Title: d.Title, FEN: d.FEN, Solver: d.Solver, Mate: d.Mate, Slot: d.Slot}
-	s.render(w, r, "puzzle-detail", p, 200)
-}
-func (s *Server) startAttempt(w http.ResponseWriter, r *http.Request) {
-	p := s.page(r, "Puzzle")
-	slot, e := strconv.Atoi(r.PathValue("slot"))
-	if e != nil {
-		s.fail(w, r, store.ErrDenied)
-		return
+	collection := r.PathValue("collection")
+	p.Base = "/puzzles/" + collection + "/" + strconv.Itoa(d.Slot)
+	v := PuzzleView{Title: d.Title, Mate: d.Mate, Solver: d.Solver, Digest: d.Digest, Slot: d.Slot, CollectionID: collection, State: state}
+	all, err := s.store.Collections(r.Context(), p.User.ID)
+	if err != nil {
+		return p, err
 	}
-	a, e := s.store.StartAttempt(r.Context(), p.User.ID, r.PathValue("collection"), slot, r.FormValue("request_id"), r.FormValue("restart") == "true")
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	navigate(w, r, "/puzzle-attempts/"+a.ID)
-}
-func (s *Server) attemptData(r *http.Request, a store.Attempt) Page {
-	p := s.page(r, a.Title)
-	p.Base = "/puzzle-attempts/" + a.ID
-	v := PuzzleView{Attempt: &a, Title: a.Title, Mate: a.Mate, Solver: a.Solver}
-	for _, b := range a.Branches {
-		branch := BranchView{PuzzleBranch: b, Revision: a.Revision, Digest: a.Digest, Solver: a.Solver, AttemptID: a.ID, Playable: b.Status == "pending" && a.Status == "active"}
-		for _, other := range a.Branches {
-			if other.ParentID == b.ID {
-				branch.Parent = true
-				break
+	for _, c := range all {
+		if c.ID != collection {
+			continue
+		}
+		// Prefer later puzzles; wrap to the first remaining undone puzzle.
+		for _, slot := range c.Slots {
+			if slot.Slot == d.Slot {
+				v.Done = slot.Solved
+				continue
+			}
+			if slot.Solved {
+				continue
+			}
+			if v.NextURL == "" || slot.Slot > d.Slot {
+				v.NextURL = "/puzzles/" + collection + "/" + strconv.Itoa(slot.Slot)
+				if slot.Slot > d.Slot {
+					break
+				}
 			}
 		}
+	}
+	for _, b := range state.Boards {
+		branch := BranchView{Board: b, Solver: d.Solver, Base: p.Base}
 		path, _ := json.Marshal(b.Path)
-		if b.Path == nil {
-			path = []byte("[]")
-		}
 		branch.PathJSON = string(path)
-		if !branch.Parent {
-			if b.Status == "pending" && a.Status == "active" {
-				v.ActiveBranches++
-			}
-			if b.Status == "solved" {
-				v.CompletedLines++
-			}
+		if b.Done {
+			v.CompletedLines++
+		} else {
+			v.ActiveBranches++
 		}
 		if len(b.Path) == 0 {
 			branch.Label = "Starting position"
-		} else if g, e := game.Replay(a.InitialFEN, b.Path, false); e == nil {
+		} else if g, e := game.Replay(d.FEN, b.Path, false); e == nil {
 			var labels []string
 			for _, m := range g.Moves {
 				labels = append(labels, m.SAN)
@@ -143,7 +115,7 @@ func (s *Server) attemptData(r *http.Request, a store.Attempt) Page {
 					}
 				}
 			}
-			if b.Status == "pending" && a.Status == "active" {
+			if !b.Done {
 				for _, m := range board.LegalMoves() {
 					branch.Legal = append(branch.Legal, m.Uci(board))
 				}
@@ -152,90 +124,53 @@ func (s *Server) attemptData(r *http.Request, a store.Attempt) Page {
 		v.Branches = append(v.Branches, branch)
 	}
 	p.Puzzle = v
-	return p
+	return p, nil
 }
-func (s *Server) attemptPage(w http.ResponseWriter, r *http.Request) {
-	p := s.page(r, "Puzzle")
-	a, e := s.store.Attempt(r.Context(), r.PathValue("id"), p.User.ID)
-	if e != nil {
-		s.fail(w, r, e)
+func (s *Server) puzzleDetail(w http.ResponseWriter, r *http.Request) {
+	slot, err := strconv.Atoi(r.PathValue("slot"))
+	if err != nil {
+		s.fail(w, r, store.ErrDenied)
 		return
 	}
-	s.render(w, r, "attempt", s.attemptData(r, a), 200)
-}
-func (s *Server) attemptState(w http.ResponseWriter, r *http.Request) {
-	p := s.page(r, "Puzzle")
-	a, e := s.store.Attempt(r.Context(), r.PathValue("id"), p.User.ID)
-	if e != nil {
-		s.fail(w, r, e)
+	d, err := s.store.Definition(r.Context(), r.PathValue("collection"), slot)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "attempt-state", s.attemptData(r, a), 200)
+	p, err := s.puzzleData(r, d, puzzle.InitialState(d))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, "puzzle-detail", p, 200)
 }
 func (s *Server) puzzleMove(w http.ResponseWriter, r *http.Request) {
-	p := s.page(r, "Puzzle")
-	rev, e := strconv.ParseInt(r.FormValue("revision"), 10, 64)
-	if e != nil {
+	slot, err := strconv.Atoi(r.PathValue("slot"))
+	if err != nil {
+		s.fail(w, r, store.ErrDenied)
+		return
+	}
+	var in store.PuzzleMove
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(&in); err != nil {
 		s.fail(w, r, store.ErrInvalid)
 		return
 	}
-	var path []string
-	if e = json.Unmarshal([]byte(r.FormValue("path")), &path); e != nil {
+	if err = decoder.Decode(&struct{}{}); err != io.EOF {
 		s.fail(w, r, store.ErrInvalid)
 		return
 	}
-	a, e := s.store.PuzzleMove(r.Context(), r.PathValue("id"), p.User.ID, store.PuzzleMove{Branch: r.PathValue("branch"), ContentDigest: r.FormValue("content_digest"), Path: path, UCI: r.FormValue("uci"), Revision: rev})
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if r.Header.Get("HX-Request") == "true" {
-		s.render(w, r, "attempt-state", s.attemptData(r, a), 200)
-	} else {
-		navigate(w, r, "/puzzle-attempts/"+a.ID)
-	}
-}
-func (s *Server) endAttempt(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "Puzzle")
-	rev, e := strconv.ParseInt(r.FormValue("revision"), 10, 64)
-	if e != nil {
-		s.fail(w, r, store.ErrInvalid)
+	d, state, err := s.store.PlayPuzzle(r.Context(), p.User.ID, r.PathValue("collection"), slot, in)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
-	a, e := s.store.EndAttempt(r.Context(), r.PathValue("id"), p.User.ID, r.FormValue("request_id"), rev)
-	if e != nil {
-		s.fail(w, r, e)
+	p, err = s.puzzleData(r, d, state)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
-	navigate(w, r, "/puzzle-attempts/"+a.ID)
-}
-func (s *Server) puzzleExport(w http.ResponseWriter, r *http.Request) {
-	p := s.page(r, "Puzzle")
-	a, e := s.store.Attempt(r.Context(), r.PathValue("id"), p.User.ID)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	b, e := a.PlayedBranch(r.PathValue("branch"))
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	g, e := game.Replay(a.InitialFEN, b.Path, false)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	format := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="puzzle.%s"`, format))
-	switch format {
-	case "fen":
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, b.FEN+"\n")
-	case "pgn":
-		w.Header().Set("Content-Type", "application/x-chess-pgn")
-		_, _ = io.WriteString(w, game.ExportPGN(g))
-	case "gif":
-		s.writeGIF(w, r, g)
-	}
+	s.render(w, r, "puzzle-state", p, 200)
 }

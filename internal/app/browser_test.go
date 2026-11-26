@@ -170,30 +170,21 @@ func TestBrowserGuestBootstrapAndPuzzleBranches(t *testing.T) {
 			}
 		}
 	}
-	a, e := s.StartAttempt(ctx, f.owner, "razchess-mates-v1", 9, uuid.NewString(), false)
-	if e != nil {
-		t.Fatal(e)
-	}
-	b.Navigate(f.cfg.Origin + "/puzzle-attempts/" + a.ID)
+	b.Navigate(f.cfg.Origin + "/puzzles/razchess-mates-v1/9")
 	def, e := s.Definition(ctx, "razchess-mates-v1", 9)
 	if e != nil {
 		t.Fatal(e)
 	}
-	b.Run(`await wait(()=>document.querySelector('.branch .board img'));window.rootBoard=el('.branch .board');const form=el('.puzzle-move');form.elements.uci.value=` + browser.Quote(def.Root.Move) + `;form.requestSubmit();await wait(()=>document.querySelectorAll('.branch').length===3);assert(rootBoard.isConnected,'root removed');window.childBoard=document.querySelectorAll('.branch .board')[2];window.childForm=document.querySelectorAll('.puzzle-move')[0];`)
+	b.Run(`await wait(()=>document.querySelector('.branch .board img'));const form=el('.puzzle-move');form.elements.uci.value=` + browser.Quote(def.Root.Move) + `;form.requestSubmit();await wait(()=>document.querySelectorAll('.branch').length===2);window.childBoard=el('#board-root-2');`)
 	for _, theme := range []string{"light", "dark"} {
 		b.Call("Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": theme}}})
 		for _, width := range []int{320, 390, 768, 1440} {
 			b.Viewport(width, 1000)
-			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'puzzle overflow');assert(cspErrors.length===0,JSON.stringify(cspErrors));const summary=el('.branch[data-parent=true]').getBoundingClientRect();const child=el('.branch[data-parent=false]').getBoundingClientRect();assert(summary.bottom<=child.top,'retired parent did not compact above live boards');`)
+			b.Run(`await frame();assert(document.documentElement.scrollWidth<=innerWidth,'puzzle overflow');assert(cspErrors.length===0,JSON.stringify(cspErrors));const boards=[...document.querySelectorAll('.branch .board')];assert(boards.length===2,'defense boards');if(innerWidth>700)assert(Math.abs(boards[0].getBoundingClientRect().top-boards[1].getBoundingClientRect().top)<2,'board alignment');`)
 			screenshot(t, b, fmt.Sprintf("puzzle-%s-%d", theme, width))
-			if width == 390 || width == 1440 {
-				checkCompactControls(t, b, "puzzle-menu", fmt.Sprintf("puzzle-menu-%s-%d", theme, width))
-			}
 		}
 	}
-	// Acknowledged source paths advance only the selected child; its sibling DOM survives.
-	move := def.Root.Replies[0].Next.Move
-	b.Run(`childForm.elements.uci.value=` + browser.Quote(move) + `;childForm.requestSubmit();await wait(()=>Number(el('#attempt-state').dataset.revision)>=2);assert(childBoard.isConnected,'sibling board replaced');`)
+	b.Run(`const form=el('#branch-root-1 form');form.elements.uci.value=` + browser.Quote(def.Root.Replies[0].Next.Move) + `;form.requestSubmit();await wait(()=>Number(el('#puzzle-state').dataset.revision)===2);assert(childBoard===el('#board-root-2'),'sibling board replaced');`)
 	b.AssertNoErrors()
 	// Editor preserves all FEN counters and readonly export URLs require the selected branch.
 	fen := "7k/8/5KQ1/8/8/8/8/8 w - - 17 23"
