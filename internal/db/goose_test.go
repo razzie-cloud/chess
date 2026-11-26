@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"io/fs"
 	"net"
 	"net/url"
 	"os"
@@ -74,8 +75,12 @@ func TestConcurrentMigrationsAndRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	files, err := fs.Glob(migrations, "migrations/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var count int
-	if err := database.QueryRowContext(ctx, "SELECT count(*) FROM goose_db_version WHERE is_applied AND version_id > 0").Scan(&count); err != nil || count != 1 {
+	if err := database.QueryRowContext(ctx, "SELECT count(*) FROM goose_db_version WHERE is_applied AND version_id > 0").Scan(&count); err != nil || count != len(files) {
 		t.Fatalf("migration count = %d: %v", count, err)
 	}
 	id, owner := uuid.NewString(), uuid.NewString()

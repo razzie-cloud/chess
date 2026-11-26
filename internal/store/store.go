@@ -36,12 +36,12 @@ type Store struct {
 func New(db *sql.DB) *Store { return &Store{DB: db, repo: rel.New(postgres.New(db))} }
 
 type Match struct {
-	ID, CreatorID, CreatorColor, GuestName, Mode, InitialFEN, CurrentFEN string
-	Revision                                                             int64
-	Status, Result, Reason                                               string
-	Tags                                                                 json.RawMessage
-	CreatedAt, UpdatedAt                                                 time.Time
-	CompletedAt                                                          *time.Time
+	ID, CreatorID, CreatorName, CreatorColor, GuestName, Mode, InitialFEN, CurrentFEN string
+	Revision                                                                          int64
+	Status, Result, Reason                                                            string
+	Tags                                                                              json.RawMessage
+	CreatedAt, UpdatedAt                                                              time.Time
+	CompletedAt                                                                       *time.Time
 }
 
 func (Match) Table() string { return "matches" }
@@ -57,7 +57,7 @@ type Snapshot struct {
 	Viewers                int
 }
 type Auth struct{ Owner, Session, View string }
-type Setup struct{ Name, Color, Mode, FEN, PGN string }
+type Setup struct{ Name, CreatorName, Color, Mode, FEN, PGN string }
 type Created struct {
 	ID, PlayingToken, ViewToken string
 	Replay, Deleted             bool
@@ -94,16 +94,19 @@ func other(c string) string {
 
 type scanner interface{ Scan(...any) error }
 
-const columns = `id,creator_id,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,created_at,updated_at,completed_at`
+const columns = `id,creator_id,creator_name,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,created_at,updated_at,completed_at`
 
 func scanMatch(row scanner) (m Match, e error) {
-	e = row.Scan(&m.ID, &m.CreatorID, &m.CreatorColor, &m.GuestName, &m.Mode, &m.InitialFEN, &m.CurrentFEN, &m.Revision, &m.Status, &m.Result, &m.Reason, &m.Tags, &m.CreatedAt, &m.UpdatedAt, &m.CompletedAt)
+	e = row.Scan(&m.ID, &m.CreatorID, &m.CreatorName, &m.CreatorColor, &m.GuestName, &m.Mode, &m.InitialFEN, &m.CurrentFEN, &m.Revision, &m.Status, &m.Result, &m.Reason, &m.Tags, &m.CreatedAt, &m.UpdatedAt, &m.CompletedAt)
 	return
 }
 
 func (s *Store) Create(ctx context.Context, owner, request string, setup Setup) (Created, error) {
 	var out Created
 	if !validID(owner) || !validID(request) || setup.Name != strings.TrimSpace(setup.Name) || utf8.RuneCountInString(setup.Name) < 1 || utf8.RuneCountInString(setup.Name) > 80 || strings.ContainsAny(setup.Name, "\r\n\x00") || (setup.Color != "w" && setup.Color != "b") {
+		return out, ErrInvalid
+	}
+	if utf8.RuneCountInString(setup.CreatorName) > 64 || strings.ContainsAny(setup.CreatorName, "\r\n\x00") {
 		return out, ErrInvalid
 	}
 	if setup.Mode != "standard" && setup.Mode != "chess960" && setup.Mode != "custom" {
@@ -173,7 +176,7 @@ func (s *Store) Create(ctx context.Context, owner, request string, setup Setup) 
 	out.PlayingToken = Token()
 	out.ViewToken = Token()
 	tags, _ := json.Marshal(g.Tags)
-	if _, e = tx.ExecContext(ctx, `INSERT INTO matches(id,creator_id,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,completed_at) VALUES($1,$2,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12)`, out.ID, owner, setup.Color, setup.Name, setup.Mode, g.InitialFEN, g.Board.Fen(), status, g.Result, g.Reason, string(tags), completed); e != nil {
+	if _, e = tx.ExecContext(ctx, `INSERT INTO matches(id,creator_id,creator_color,guest_name,mode,initial_fen,current_fen,revision,status,result,reason,tags,completed_at,creator_name) VALUES($1,$2,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12,$13)`, out.ID, owner, setup.Color, setup.Name, setup.Mode, g.InitialFEN, g.Board.Fen(), status, g.Result, g.Reason, string(tags), completed, setup.CreatorName); e != nil {
 		return Created{}, e
 	}
 	for i, m := range g.Moves {
@@ -295,6 +298,16 @@ func (s *Store) Snapshot(ctx context.Context, id string, a Auth) (Snapshot, erro
 	}
 	return out, tx.Commit()
 }
+
+// RememberCreatorName fills legacy matches only after an authenticated owner read.
+func (s *Store) RememberCreatorName(ctx context.Context, id, owner, name string) error {
+	if !validID(id) || !validID(owner) || name == "" || utf8.RuneCountInString(name) > 64 || strings.ContainsAny(name, "\r\n\x00") {
+		return ErrInvalid
+	}
+	_, err := s.DB.ExecContext(ctx, `UPDATE matches SET creator_name=$3 WHERE id=$1 AND creator_id=$2 AND creator_name=''`, id, owner, name)
+	return err
+}
+
 func (s *Store) ViewID(ctx context.Context, token string) (string, error) {
 	if !ValidToken(token) {
 		return "", ErrDenied

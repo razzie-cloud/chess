@@ -265,6 +265,7 @@ func setupForm(r *http.Request) store.Setup {
 func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	p := s.page(r, "New match")
 	p.Setup = setupForm(r)
+	p.Setup.CreatorName = p.User.Name
 	p.RequestID = r.FormValue("request_id")
 	result, e := s.store.Create(r.Context(), p.User.ID, p.RequestID, p.Setup)
 	if e != nil {
@@ -354,10 +355,20 @@ func (s *Server) get(r *http.Request) (store.Snapshot, error) {
 	if e != nil {
 		return store.Snapshot{}, e
 	}
-	return s.store.Snapshot(r.Context(), id, a)
+	m, e := s.store.Snapshot(r.Context(), id, a)
+	if e == nil && m.Role == "owner" && m.CreatorName == "" {
+		u, _ := r.Context().Value(key{}).(identity)
+		e = s.store.RememberCreatorName(r.Context(), id, u.ID, u.Name)
+		m.CreatorName = u.Name
+	}
+	return m, e
 }
 func (s *Server) matchData(r *http.Request, m store.Snapshot) Page {
-	p := s.page(r, "Match with "+m.GuestName)
+	host := m.CreatorName
+	if host == "" {
+		host = "Host"
+	}
+	p := s.page(r, host+" vs "+m.GuestName)
 	p.Match = &m
 	base := "/matches/" + m.ID
 	if m.Role == "guest" {
