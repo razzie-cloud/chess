@@ -8,6 +8,26 @@ Swarm, broker policies, helper fixtures, tag selection and Caddy validation.
 [Live acceptance](live-acceptance.md) separately records real Gateway sessions,
 virtual passkeys, anonymous guest play, round-robin replicas, restarts and sign-out.
 
+## Mobile piece dragging — 27 November 2026
+
+Playable match boards, puzzle branches and the position editor (including spare
+pieces) use `touch-action: none` so touch drags do not scroll the page. Scrolling
+outside these boards and on read-only viewer/preview boards remains available.
+
+`TestBrowserMobileTouchDragging` reproduced page scrolling before the fix and
+passed afterward with production CSP, headless Brave and a disposable loopback
+PostgreSQL container. At 390×700 in both themes it exercises owner and guest
+moves, the initial puzzle board and a dynamically inserted defense board, editor
+moves and spare pieces, plus ordinary scrolling outside playable boards and on
+a viewer board. Physical Android/iOS devices were not tested.
+
+Checks: `go build ./...`, `go vet ./...`, `go test ./... -count=1`, and
+`go test -race ./... -count=1`, with the disposable `TEST_DATABASE_URL` and an
+isolated Go cache. The touch regression ran separately with
+`CHROMIUM_EXECUTABLE_PATH=/usr/bin/brave`; other browser tests, live Gateway
+acceptance and optional Stockfish executable checks were not enabled. Nothing
+was published or deployed.
+
 ## Win fireworks — 27 November 2026
 
 Decisive match results and fully completed puzzles play a brief local canvas
