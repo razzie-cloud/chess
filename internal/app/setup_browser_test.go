@@ -38,6 +38,8 @@ func TestBrowserMatchCreators(t *testing.T) {
 					if variant.mode == "chess960" {
 						b.Run(`
 const before=el('[name=chess960_index]').value,boardNode=el('#setup-board'),form=el('#setup'),name=form.elements.name,request=form.elements.request_id.value,header=el('.cloud-header'),url=location.href,historyLength=history.length;
+// Reproduce browsers that blur a focused button when HTMX disables it.
+el('#refresh-chess960').addEventListener('htmx:beforeSend',event=>event.currentTarget.blur(),{once:true});
 name.value='Draft opponent';name.dispatchEvent(new Event('input',{bubbles:true}));const refresh=el('#refresh-chess960');refresh.focus();refresh.click();assert(refresh.disabled&&el('.setup-create').disabled,'refresh did not block competing creation');
 await wait(()=>el('[name=chess960_index]').value!==before&&!refresh.disabled&&el('#setup-board').dataset.fen===el('#chess960-position').dataset.fen);
 assert(document.activeElement===refresh,'refresh lost keyboard focus');assert(boardNode===el('#setup-board')&&form===el('#setup')&&name===form.elements.name&&header===el('.cloud-header'),'refresh replaced stable nodes');assert(name.value==='Draft opponent'&&form.elements.request_id.value===request,'refresh lost form draft');assert(el('#setup input[name=color][value=b]').checked,'refresh lost color');assert(location.href===url&&history.length===historyLength,'refresh changed history');
@@ -49,9 +51,9 @@ const resource=performance.getEntriesByType('resource').filter(r=>r.name.include
 				if variant.mode == "chess960" && width == 1440 && theme == "dark" {
 					b.Call("Network.enable", nil)
 					b.Call("Network.setBlockedURLs", map[string]any{"urls": []string{"*/matches/new/chess960*"}})
-					b.Run(`window.keptIndex=el('[name=chess960_index]').value;window.keptFEN=el('#setup-board').dataset.fen;el('#refresh-chess960').click();await wait(()=>el('#chess960-feedback').textContent.includes('Unable to refresh')&&!el('#refresh-chess960').disabled);assert(el('[name=chess960_index]').value===keptIndex&&el('#setup-board').dataset.fen===keptFEN,'failed refresh changed selection');assert(!el('.setup-create').disabled,'failed refresh left creation disabled');`)
+					b.Run(`window.keptIndex=el('[name=chess960_index]').value;window.keptFEN=el('#setup-board').dataset.fen;const refresh=el('#refresh-chess960');refresh.addEventListener('htmx:beforeSend',()=>refresh.blur(),{once:true});refresh.focus();refresh.click();await wait(()=>el('#chess960-feedback').textContent.includes('Unable to refresh')&&!refresh.disabled);assert(document.activeElement===refresh,'failed refresh lost keyboard focus');assert(el('[name=chess960_index]').value===keptIndex&&el('#setup-board').dataset.fen===keptFEN,'failed refresh changed selection');assert(!el('.setup-create').disabled,'failed refresh left creation disabled');`)
 					b.Call("Network.setBlockedURLs", map[string]any{"urls": []string{}})
-					b.Run(`el('#refresh-chess960').click();await wait(()=>el('[name=chess960_index]').value!==keptIndex&&!el('#refresh-chess960').disabled);assert(el('#chess960-feedback').textContent==='New starting position ready.','retry failed');`)
+					b.Run(`const refresh=el('#refresh-chess960'),name=el('#setup').elements.name;refresh.focus();refresh.click();name.focus();await wait(()=>el('[name=chess960_index]').value!==keptIndex&&!refresh.disabled);assert(document.activeElement===name,'refresh stole focus from another field');assert(el('#chess960-feedback').textContent==='New starting position ready.','retry failed');`)
 				}
 				b.Run(`assert(cspErrors.length===0,JSON.stringify(cspErrors));document.activeElement?.blur();`)
 				if width == 390 || width == 1440 {

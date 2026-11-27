@@ -97,6 +97,16 @@
       if (preview && refresh960) {
         cleaners.push(() => htmx.trigger(refresh960, 'htmx:abort'));
         const feedback = document.querySelector('#chess960-feedback');
+        let restoreRefreshFocus = false;
+        on(document, 'htmx:beforeRequest', event => {
+          if (event.detail.elt === refresh960) restoreRefreshFocus = document.activeElement === refresh960;
+        });
+        on(document, 'htmx:afterRequest', event => {
+          if (event.detail.elt !== refresh960) return;
+          // Disabling the button can blur it; keep focus if the user moved elsewhere.
+          if (restoreRefreshFocus && refresh960.isConnected && document.activeElement === document.body) refresh960.focus({preventScroll: true});
+          restoreRefreshFocus = false;
+        });
         on(document, 'htmx:afterSwap', event => {
           if (event.detail.target?.id !== 'chess960-position') return;
           const position = document.querySelector('#chess960-position');
