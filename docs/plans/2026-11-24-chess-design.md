@@ -484,7 +484,8 @@ the complete FEN, not an assumed single-piece animation. A delayed response must
 not undo a later move. Remote moves animate once; reconnection across several
 moves reconciles directly to the latest position. Honor reduced motion.
 
-Promotion uses `dialog.showModal()` with four named piece buttons. Escape/cancel
+Promotion uses a compact, centered `dialog.showModal()` with four piece-image
+buttons matching the player's color, each named for assistive technology. Escape/cancel
 sends no move and restores focus/position. Disable or invalidate stale promotion
 choices after a revision change. The menu uses a native popover with normal
 links/buttons and keyboard navigation. Keep both outside state-swap targets.

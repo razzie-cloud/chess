@@ -116,3 +116,14 @@ dialog{border:0;padding:1.5rem;max-width:min(600px,calc(100vw - 2rem));backgroun
 .setup-refresh{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;height:38px;min-width:38px;flex-shrink:0;font-size:.8rem;line-height:1.4}.setup-refresh .icon{display:block;width:16px;height:16px}#chess960-feedback:empty{display:none}
 @media(max-width:480px){.setup-refresh span{display:none}}
 .fireworks{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:100}
+
+/* Pico's dialog defaults fill the viewport; promotion is a compact native modal. */
+dialog.promotion-dialog{display:block;width:22rem;min-width:0;height:fit-content;min-height:0;margin:auto;padding:1rem;border-radius:var(--pico-border-radius);box-shadow:0 .5rem 2rem #0003;backdrop-filter:none}
+dialog.promotion-dialog:not([open]){display:none}
+.promotion-dialog::backdrop{background:#0006}
+.promotion-dialog h2{font-size:1.15rem;margin:0 0 1rem}
+.promotion-choices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;margin-bottom:1rem}
+.promotion-choices button{display:grid;place-items:center;margin:0;padding:.25rem;border-color:#c4a579;background:#f0d9b5}
+.promotion-choices button:is(:hover,:focus-visible){background:#e5c99d}
+.promotion-choices img{display:block;width:48px;height:48px;object-fit:contain}
+.promotion-dialog>button{width:100%;margin:0}

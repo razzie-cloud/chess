@@ -595,3 +595,32 @@ anonymous memory was about 4.5 MiB, process RSS 11 MiB, and file cache 86 MiB.
 Recent searches and cache pressure can change idle readings. These observations
 do not replace the existing active-load check. No Go code changed, so Go/browser
 suites were not repeated for this Compose/documentation consolidation.
+
+## Compact promotion dialog — 27 November 2026
+
+Matches and puzzles now use a small centered promotion panel instead of inheriting
+PicoCSS's full-screen dialog sizing. Four image buttons reuse the board's local
+artwork in the player's color. Accessible names and tooltips identify the pieces;
+Cancel, Escape, revision guards and the persistent dialog hooks remain intact.
+See the [desktop match](screenshots/promotion-w-light-1440.png) and
+[dark mobile puzzle](screenshots/puzzle-promotion-b-dark-390.png) captures.
+
+Validation used Go 1.27.4, `/usr/bin/brave`, and an isolated disposable PostgreSQL
+container bound to loopback with random schemas:
+
+- `gofmt` on the changed browser tests; `go build ./...`; `go vet ./...`;
+  `git diff --check`.
+- `go test ./... -count=1` and `go test -race ./... -count=1`: each passed
+  189 tests/subtests in 19 packages. Browser,
+  live SSO and opt-in real-engine tests skipped without their environment settings.
+- Focused promotion/castling and puzzle-promotion browser tests passed normally
+  and with `-race`, using `CHROMIUM_EXECUTABLE_PATH=/usr/bin/brave`. Both themes
+  at 320/390/768/1440 pixels cover compact centered bounds, visible local artwork,
+  correct white/black colors, keyboard-focusable named choices and touch targets.
+  Real drags exercise Escape/Cancel without moves, knight-image underpromotion,
+  rejected puzzle selections and retained dialog nodes. No browser/CSP errors
+  occurred. Six screenshots were saved and representative desktop/mobile captures
+  were visually inspected.
+
+Live Gateway SSO, physical devices and other browsers were not retested. Nothing
+was published or deployed.

@@ -228,9 +228,13 @@ func TestBrowserNavigationDraftAndStaleState(t *testing.T) {
 }
 
 func drag(b *browser.Browser, from, to string) {
+	dragBoard(b, "#match-board", from, to)
+}
+
+func dragBoard(b *browser.Browser, selector, from, to string) {
 	b.Run(`await wait(()=>jQuery(':animated').length===0);await frame();`)
 	var points struct{ X1, Y1, X2, Y2 float64 }
-	_ = json.Unmarshal(b.Eval(`(()=>{const a=document.querySelector('#match-board [data-square="`+from+`"]').getBoundingClientRect(),b=document.querySelector('#match-board [data-square="`+to+`"]').getBoundingClientRect();return {X1:a.x+a.width/2,Y1:a.y+a.height/2,X2:b.x+b.width/2,Y2:b.y+b.height/2}})()`), &points)
+	_ = json.Unmarshal(b.Eval(`(()=>{const a=document.querySelector(`+browser.Quote(selector+` [data-square="`+from+`"]`)+`).getBoundingClientRect(),b=document.querySelector(`+browser.Quote(selector+` [data-square="`+to+`"]`)+`).getBoundingClientRect();return {X1:a.x+a.width/2,Y1:a.y+a.height/2,X2:b.x+b.width/2,Y2:b.y+b.height/2}})()`), &points)
 	b.Call("Input.dispatchMouseEvent", map[string]any{"type": "mousePressed", "x": points.X1, "y": points.Y1, "button": "left", "buttons": 1, "clickCount": 1})
 	b.Call("Input.dispatchMouseEvent", map[string]any{"type": "mouseMoved", "x": points.X2, "y": points.Y2, "button": "left", "buttons": 1})
 	b.Call("Input.dispatchMouseEvent", map[string]any{"type": "mouseReleased", "x": points.X2, "y": points.Y2, "button": "left", "buttons": 0, "clickCount": 1})
@@ -251,10 +255,11 @@ func TestBrowserPromotionAndAccessibleCastle(t *testing.T) {
 	b.Run(`await wait(()=>document.querySelector('#match-board [data-square=a7] img'));window.dialog=el('#promotion');`)
 	drag(b, "a7", "a8")
 	b.Run(`await wait(()=>el('#promotion').open);`)
+	checkPromotionDialog(t, b, "promotion", "w")
 	b.Escape()
 	b.Run(`assert(!dialog.open,'promotion cancel');assert(JSON.parse(el('#match-state').dataset.state).revision===1,'cancel sent move');`)
 	drag(b, "a7", "a8")
-	b.Run(`await wait(()=>dialog.open);el('[data-promotion=n]').click();await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===2);assert(el('#promotion')===dialog,'promotion dialog replaced');assert(JSON.parse(el('#match-state').dataset.state).fen.startsWith('N6k/'),'underpromotion lost');`)
+	b.Run(`await wait(()=>dialog.open);el('[data-promotion=n] img').click();await wait(()=>JSON.parse(el('#match-state').dataset.state).revision===2);assert(el('#promotion')===dialog,'promotion dialog replaced');assert(JSON.parse(el('#match-state').dataset.state).fen.startsWith('N6k/'),'underpromotion lost');`)
 	castle, err := s.Create(t.Context(), f.owner, uuid.NewString(), store.Setup{Name: "Castling", Color: "w", Mode: "custom", FEN: "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"})
 	if err != nil {
 		t.Fatal(err)
